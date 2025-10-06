@@ -1,0 +1,31 @@
+# ==========================================
+# ARCHIVOS GRANDES - NO SUBIR
+# ==========================================
+
+# Datos
+*.rds
+*.RData
+*.xlsx
+*.xls
+*.csv
+datos_intermedios/
+datos_procesados/
+resultados/
+
+# Gráficos
+graficos/
+*.png
+*.pdf
+
+# Temporales R
+.Rhistory
+.RData
+.Rproj.user/
+
+# Sistema
+.DS_Store
+*~
+
+# EXCEPCIONES (archivos pequeños que SÍ queremos)
+!2_parametros_finales_ajustados_manualmente.csv
+!parametros_*.csv
