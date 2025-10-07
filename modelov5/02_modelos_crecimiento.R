@@ -5,7 +5,7 @@
 
 library(tidyverse)
 
-source("R5/core_calculos.R")
+source("modelov5/core_calculos.R")
 
 # ==============================================================================
 # 1. CRECIMIENTO DIAMÉTRICO

@@ -13,7 +13,7 @@ calcular_distribucion_liocourt <- function(arboles_rodal, config) {
   
   # Filtrar solo árboles vivos del rodal
   arboles_vivos <- arboles_rodal %>%
-    filtrar_arboles_vivos(arboles_df)
+    filtrar_arboles_vivos()
   
   if (nrow(arboles_vivos) == 0) {
     warning("No hay árboles vivos en el rodal para calcular distribución.")

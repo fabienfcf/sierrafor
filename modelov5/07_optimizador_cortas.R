@@ -6,7 +6,7 @@
 library(tidyverse)
 
 # Cargar dependencias
-source("R5/core_calculos.R")
+source("modelov5/core_calculos.R")
 
 # ==============================================================================
 # 1. CALCULAR PLAN DE CORTAS PARA UN RODAL
@@ -18,12 +18,11 @@ calcular_plan_cortas <- function(arboles_rodal, config) {
   cat("║           OPTIMIZADOR DE CORTAS FORESTALES                ║\n")
   cat("╚════════════════════════════════════════════════════════════╝\n\n")
   
-  # ✓ CORRECCIÓN 1: Filtrar correctamente arboles_rodal (no arboles_df)
   arboles_vivos <- filtrar_arboles_vivos(arboles_rodal)
   
   cat(sprintf("[POBLACIÓN] Árboles vivos: %d\n", nrow(arboles_vivos)))
   
-  # 1. Calcular distribución actual vs J invertida ideal (GLOBAL)
+  # 1. Calcular distribución
   cat("\n[PASO 1] Calculando distribución objetivo (J invertida global)...\n")
   distribucion <- calcular_distribucion_liocourt(arboles_vivos, config)
   
@@ -32,7 +31,6 @@ calcular_plan_cortas <- function(arboles_rodal, config) {
     return(NULL)
   }
   
-  # Mostrar diagnóstico
   cat("\n[DIAGNÓSTICO ESTRUCTURAL]\n")
   diagnostico_resumen <- distribucion %>%
     count(diagnostico) %>%
@@ -44,7 +42,6 @@ calcular_plan_cortas <- function(arboles_rodal, config) {
   
   clases_a_intervenir <- distribucion %>%
     mutate(
-      # Extraer límite inferior usando función de core
       clase_d_num = extraer_limite_inferior_clase(clase_diametrica)
     ) %>%
     filter(
@@ -52,8 +49,6 @@ calcular_plan_cortas <- function(arboles_rodal, config) {
       diferencia > 0
     )
   
-  # ✓ CORRECCIÓN 2: Simplificar lógica - solo marcar sobrepobladas
-  # La verificación de DMC se hace después por género específico
   clases_cortables <- clases_a_intervenir
   
   if (nrow(clases_cortables) == 0) {
@@ -73,7 +68,7 @@ calcular_plan_cortas <- function(arboles_rodal, config) {
   
   cat(sprintf("  Clases sobrepobladas: %d\n", nrow(clases_cortables)))
   
-  # 3. Distribuir cortas entre géneros (aquí se verifica DMC específico)
+  # 3. Distribuir cortas entre géneros
   cat("\n[PASO 3] Distribuyendo cortas entre géneros...\n")
   cat(sprintf("  Estrategia: %s\n", 
               if_else("dominancia_baja" %in% config$prioridad,
@@ -90,7 +85,6 @@ calcular_plan_cortas <- function(arboles_rodal, config) {
     cat(sprintf("    Actual: %d | Ideal: %.1f | Exceso: %.1f árboles\n",
                 clase$n_actual, clase$n_ideal, clase$diferencia))
     
-    # Cantidad a remover (según intensidad de corta)
     n_a_remover_total <- floor(clase$diferencia * config$intensidad_corta)
     
     cat(sprintf("    A remover (%.0f%% intensidad): %d árboles\n",
@@ -98,7 +92,6 @@ calcular_plan_cortas <- function(arboles_rodal, config) {
     
     if (n_a_remover_total == 0) next
     
-    # Distribuir cortas entre géneros
     cortas_clase <- distribuir_cortas_generos(
       arboles_rodal = arboles_vivos,
       clase_diametrica = clase$clase_diametrica,
@@ -111,14 +104,58 @@ calcular_plan_cortas <- function(arboles_rodal, config) {
     }
   }
   
+  # # Después del loop en calcular_plan_cortas(), ANTES de deduplicar
+  # if (nrow(arboles_marcados) > 0) {
+  #   cat("\n=== ANÁLISIS DE DUPLICADOS ===\n")
+  #   
+  #   # Primero ver qué columnas tiene
+  #   cat("Columnas disponibles:\n")
+  #   print(names(arboles_marcados))
+  #   
+  #   # Ver los duplicados SIN intentar seleccionar clase
+  #   duplicados <- arboles_marcados %>%
+  #     group_by(arbol_id) %>%
+  #     filter(n() > 1) %>%
+  #     arrange(arbol_id) %>%
+  #     select(arbol_id, diametro_normal, genero_grupo, dominancia)
+  #   
+  #   if (nrow(duplicados) > 0) {
+  #     cat("\nÁrboles duplicados:\n")
+  #     print(duplicados)
+  #     
+  #     # Calcular clase para ver dónde caen
+  #     duplicados_con_clase <- duplicados %>%
+  #       mutate(
+  #         clase_calculada = asignar_clase_diametrica(diametro_normal, formato = "rango")
+  #       )
+  #     
+  #     cat("\nClases de los duplicados:\n")
+  #     print(duplicados_con_clase)
+  #     
+  #   } else {
+  #     cat("\nNo hay duplicados (raro si llegaste aquí)\n")
+  #   }
+  # }
+  # 
+  #  # DEDUPLICAR
+  # if (nrow(arboles_marcados) > 0) {
+  #   n_antes <- nrow(arboles_marcados)
+  #   arboles_marcados <- arboles_marcados %>%
+  #     distinct(arbol_id, .keep_all = TRUE)
+  #   n_despues <- nrow(arboles_marcados)
+  # 
+  #   if (n_antes != n_despues) {
+  #     cat(sprintf("\n⚠️  %d duplicados removidos\n", n_antes - n_despues))
+  #   }
+  # }
+  
   # 4. Resumen final
   cat("\n╔════════════════════════════════════════════════════════════╗\n")
   cat("║              RESUMEN DEL PLAN DE CORTAS                   ║\n")
   cat("╚════════════════════════════════════════════════════════════╝\n\n")
   
   if (nrow(arboles_marcados) == 0) {
-    cat("  No se marcaron árboles para corta\n")
-    cat("  (Todas las clases sobrepobladas están bajo DMC)\n\n")
+    cat("  No se marcaron árboles para corta\n\n")
     return(list(
       distribucion = distribucion,
       arboles_marcados = tibble(),
@@ -131,7 +168,7 @@ calcular_plan_cortas <- function(arboles_rodal, config) {
     ))
   }
   
-  # Calcular estadísticas
+  # Estadísticas
   resumen_cortas <- arboles_marcados %>%
     summarise(
       n_arboles = n(),
@@ -158,7 +195,6 @@ calcular_plan_cortas <- function(arboles_rodal, config) {
   
   cat("\n[DISTRIBUCIÓN POR GÉNERO]\n")
   print(resumen_genero)
-  
   cat("\n")
   
   return(list(
@@ -231,21 +267,33 @@ distribuir_cortas_generos <- function(arboles_rodal, clase_diametrica,
     genero <- cortas_por_genero$genero_grupo[i]
     n_cortar <- cortas_por_genero$n_a_cortar[i]
     
-    # Filtrar árboles de este género en esta clase
+    # REASIGNAR genero_grupo explícitamente
     arboles_genero <- arboles_clase %>%
-      filter(genero_grupo == genero)
+      mutate(genero_check = genero_grupo) %>%  # ← Crear copia
+      filter(genero_check == !!genero) %>%     # ← Filtrar con !!
+      select(-genero_check)                     # ← Limpiar
     
-    # ✓ CORRECCIÓN 4: Verificar DMC específico del género AQUÍ
-    # (no antes a nivel de clase)
+    # O MEJOR: usar la columna original del dataset
+    arboles_genero <- arboles_rodal %>%
+      mutate(
+        clase_d = asignar_clase_diametrica(diametro_normal, 
+                                           breaks = config$clases_d,
+                                           formato = "rango")
+      ) %>%
+      filter(clase_d == clase_diametrica,
+             genero_grupo == !!genero)  # ← Filtrar en un solo paso
+    
+    # DEBUG
+    cat(sprintf("\n        [DEBUG] Género %s en clase %s:\n", genero, clase_diametrica))
+    cat(sprintf("          Total en clase+género: %d\n", nrow(arboles_genero)))
+    
     dmc_genero <- config$dmc[[genero]]
-    
-    if (is.null(dmc_genero)) {
-      warning(sprintf("DMC no definido para género %s", genero))
-      next
-    }
-    
     arboles_genero_cortables <- arboles_genero %>%
       filter(diametro_normal >= dmc_genero)
+    
+    cat(sprintf("          Cortables (≥ DMC): %d\n", nrow(arboles_genero_cortables)))
+    cat(sprintf("          IDs cortables: %s\n", 
+                paste(head(arboles_genero_cortables$arbol_id, 5), collapse=", ")))
     
     if (nrow(arboles_genero_cortables) == 0) {
       cat(sprintf("        %s: Sin árboles ≥ DMC (%.0f cm) - OMITIDO\n", 
@@ -253,20 +301,23 @@ distribuir_cortas_generos <- function(arboles_rodal, clase_diametrica,
       next
     }
     
-    # Seleccionar según prioridad
     arboles_selec_genero <- seleccionar_arboles_corta(
       arboles = arboles_genero_cortables,
       n_a_cortar = n_cortar,
       prioridad = config$prioridad
     )
     
+    cat(sprintf("          Seleccionados: %d\n", nrow(arboles_selec_genero)))
+    cat(sprintf("          IDs seleccionados: %s\n", 
+                paste(arboles_selec_genero$arbol_id, collapse=", ")))
+    
     if (nrow(arboles_selec_genero) > 0) {
       arboles_seleccionados <- bind_rows(arboles_seleccionados, arboles_selec_genero)
     }
-  }
+  }  # ← Cierra el for loop
   
   return(arboles_seleccionados)
-}
+}  # ← Cierra distribuir_cortas_generos()
 
 # ==============================================================================
 # 3. SELECCIONAR ÁRBOLES ESPECÍFICOS SEGÚN PRIORIDAD
@@ -274,54 +325,40 @@ distribuir_cortas_generos <- function(arboles_rodal, clase_diametrica,
 
 seleccionar_arboles_corta <- function(arboles, n_a_cortar, prioridad) {
   
-  # Limitar al número disponible
   n_a_cortar <- min(n_a_cortar, nrow(arboles))
   
   if (n_a_cortar == 0) {
     return(tibble())
   }
   
-  # ESTRATEGIAS DE SELECCIÓN:
-  #
-  # OPCIÓN 1: "dominancia_baja" + "diametro_menor"
-  #    Objetivo: FAVORECER REGENERACIÓN
-  #    Corta: Suprimidos e intermedios primero (liberar espacio bajo dosel)
-  #    Mantiene: Dominantes y codominantes (fuente de semilla, protección)
-  #    Uso: Bosques densos que necesitan aclareos para regeneración
-  #
-  # OPCIÓN 2: "dominancia_alta" + "diametro_mayor"  
-  #    Objetivo: MAXIMIZAR APROVECHAMIENTO COMERCIAL
-  #    Corta: Dominantes y codominantes grandes (mejor calidad maderera)
-  #    Mantiene: Intermedios y suprimidos (futura cosecha)
-  #    Uso: Aprovechamiento comercial tradicional
-  
-  arboles_ordenados <- arboles
-  
-  for (criterio in prioridad) {
+  # UN SOLO arrange() con TODOS los criterios
+  if ("dominancia_baja" %in% prioridad && "diametro_menor" %in% prioridad) {
+    # Liberar regeneración: suprimidos + pequeños primero
+    arboles_ordenados <- arboles %>%
+      arrange(desc(dominancia), diametro_normal, arbol_id)
     
-    if (criterio == "dominancia_baja") {
-      # Priorizar suprimidos e intermedios (6, 5, 3)
-      arboles_ordenados <- arboles_ordenados %>%
-        arrange(desc(dominancia))
-      
-    } else if (criterio == "dominancia_alta") {
-      # Priorizar dominantes y codominantes (1, 2, 4)
-      arboles_ordenados <- arboles_ordenados %>%
-        arrange(dominancia)
-      
-    } else if (criterio == "diametro_mayor") {
-      # Dentro de cada dominancia, los más grandes primero
-      arboles_ordenados <- arboles_ordenados %>%
-        arrange(desc(dominancia), desc(diametro_normal))
-      
-    } else if (criterio == "diametro_menor") {
-      # Dentro de cada dominancia, los más pequeños primero
-      arboles_ordenados <- arboles_ordenados %>%
-        arrange(desc(dominancia), diametro_normal)
-    }
+  } else if ("dominancia_alta" %in% prioridad && "diametro_mayor" %in% prioridad) {
+    # Aprovechamiento: dominantes + grandes primero
+    arboles_ordenados <- arboles %>%
+      arrange(dominancia, desc(diametro_normal), arbol_id)
+    
+  } else if ("dominancia_baja" %in% prioridad) {
+    # Solo dominancia baja
+    arboles_ordenados <- arboles %>%
+      arrange(desc(dominancia), arbol_id)
+    
+  } else if ("dominancia_alta" %in% prioridad) {
+    # Solo dominancia alta
+    arboles_ordenados <- arboles %>%
+      arrange(dominancia, arbol_id)
+    
+  } else {
+    # Fallback: por ID
+    arboles_ordenados <- arboles %>%
+      arrange(arbol_id)
   }
   
-  # Seleccionar los primeros N
+  # Seleccionar
   arboles_marcados <- arboles_ordenados %>%
     slice(1:n_a_cortar) %>%
     mutate(marcado_para_corta = TRUE)
@@ -530,57 +567,73 @@ aplicar_cortas <- function(arboles_df, plan_cortas, año_corta = NULL) {
   cat(sprintf("\n[AÑO %s] Aplicando cortas...\n", 
               if_else(is.null(año_corta), "N/A", as.character(año_corta))))
   
-  # IDs de árboles a cortar
-  ids_a_cortar <- plan_cortas$arboles_marcados$arbol_id
+  # IDs a cortar - CONVERTIR A CHARACTER
+  ids_a_cortar <- as.character(plan_cortas$arboles_marcados$arbol_id)
   
   cat(sprintf("  Árboles a cortar: %d\n", length(ids_a_cortar)))
   
-  # Marcar como cortados (dominancia 9 = tocón)
+  # Marcar cortados - SIN condición de año_corta en el if_else
   arboles_actualizado <- arboles_df %>%
     mutate(
-      dominancia_pre_corta = if_else(
-        arbol_id %in% ids_a_cortar,
-        dominancia,
-        NA_real_
-      ),
-      dominancia = if_else(
-        arbol_id %in% ids_a_cortar,
-        9,  # Tocón
-        dominancia
-      ),
-      año_corta = if_else(
-        arbol_id %in% ids_a_cortar & !is.null(año_corta),
-        año_corta,
-        NA_real_
-      )
-    )
+      arbol_id_char = as.character(arbol_id),
+      es_cortado = arbol_id_char %in% ids_a_cortar,  # Flag simple
+      
+      dominancia_pre_corta = if_else(es_cortado, dominancia, NA_real_),
+      dominancia = if_else(es_cortado, 9, dominancia),
+      año_corta = if_else(es_cortado, año_corta %||% NA_real_, NA_real_)
+    ) %>%
+    select(-arbol_id_char, -es_cortado)
   
-  # Estadísticas
-  vol_cortado <- arboles_actualizado %>%
-    filter(arbol_id %in% ids_a_cortar) %>%
-    summarise(vol_total = sum(volumen_m3, na.rm = TRUE)) %>%
-    pull(vol_total)
+  # Verificación
+  n_cortados_real <- sum(arboles_actualizado$dominancia == 9 & 
+                           arboles_actualizado$dominancia_pre_corta != 9,
+                         na.rm = TRUE)
+  
+  if (n_cortados_real != length(ids_a_cortar)) {
+    warning(sprintf(
+      "⚠️  Problema: Se esperaban %d tocones pero se crearon %d",
+      length(ids_a_cortar), n_cortados_real
+    ))
+    
+    # Debug: ¿Cuáles no se cortaron?
+    ids_cortados_real <- arboles_actualizado %>%
+      filter(dominancia == 9, !is.na(dominancia_pre_corta)) %>%
+      pull(arbol_id)
+    
+    ids_faltantes <- setdiff(ids_a_cortar, as.character(ids_cortados_real))
+    
+    if (length(ids_faltantes) > 0) {
+      cat(sprintf("\n  IDs que NO se cortaron (%d):\n", length(ids_faltantes)))
+      print(head(ids_faltantes, 5))
+    }
+  }
+  
+  # Estadísticas (solo árboles recién cortados)
+  arboles_recien_cortados <- arboles_actualizado %>%
+    filter(dominancia == 9, !is.na(dominancia_pre_corta))
+  
+  vol_cortado <- sum(arboles_recien_cortados$volumen_m3, na.rm = TRUE)
   
   cat(sprintf("  Volumen extraído: %.2f m³\n", vol_cortado))
   
   # Por género
-  resumen_genero <- arboles_actualizado %>%
-    filter(arbol_id %in% ids_a_cortar) %>%
-    group_by(genero_grupo) %>%
-    summarise(
-      n_cortados = n(),
-      vol_cortado = sum(volumen_m3, na.rm = TRUE),
-      .groups = "drop"
-    )
-  
-  cat("\n  Cortas por género:\n")
-  print(resumen_genero)
+  if (nrow(arboles_recien_cortados) > 0) {
+    resumen_genero <- arboles_recien_cortados %>%
+      group_by(genero_grupo) %>%
+      summarise(
+        n_cortados = n(),
+        vol_cortado = sum(volumen_m3, na.rm = TRUE),
+        .groups = "drop"
+      )
+    
+    cat("\n  Cortas por género:\n")
+    print(resumen_genero)
+  }
   
   cat("\n")
   
   return(arboles_actualizado)
 }
-
 # ==============================================================================
 # 7. FUNCIÓN DE TEST UNITARIO
 # ==============================================================================
