@@ -70,8 +70,8 @@ Genera todas las tablas requeridas:
 
 ## Autor
 
-Fabien Fauchereau  
-CONAFOR - PMF Las Alazanas 2026-2036
+Dr Fabien Charbonnier  
+Facultad de Ciencias Forestales - UANL
 
 ## Licencia
 
