@@ -1,0 +1,79 @@
+% ==============================================================================
+% DOCUMENTO MAESTRO - TABLAS PMF
+% Generado automáticamente
+% ==============================================================================
+
+\documentclass[12pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[spanish]{babel}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{geometry}
+\geometry{margin=2.5cm}
+\usepackage{float}
+
+\title{Programa de Manejo Forestal\\
+Ejido Las Alazanas\\
+Tablas de Simulación 10 Años}
+\author{Elaborado conforme a la NOM-152-SEMARNAT-2023}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+\newpage
+
+% ==============================================================================
+% SECCIÓN 1: INVENTARIO INICIAL
+% ==============================================================================
+
+\section{Inventario Inicial}
+
+La Tabla~\ref{tab:inventario_inicial} presenta el estado inicial del inventario forestal,
+desagregado por rodal y género.
+
+\input{01_inventario_inicial.tex}
+
+% ==============================================================================
+% SECCIÓN 2: PROYECCIÓN 10 AÑOS
+% ==============================================================================
+
+\section{Proyección a 10 Años}
+
+La Tabla~\ref{tab:comparacion_10años} muestra la comparación entre el estado inicial
+y el estado proyectado después de 10 años de crecimiento, mortalidad, reclutamiento
+y aplicación de cortas programadas.
+
+\input{02_comparacion_inicial_final.tex}
+
+% ==============================================================================
+% SECCIÓN 3: INTENSIDAD DE CORTE
+% ==============================================================================
+
+\section{Programa de Aprovechamiento}
+
+\subsection{Resumen de Intensidad de Corte}
+
+La Tabla~\ref{tab:intensidad_corte} presenta la intensidad de corte por rodal y género.
+
+\input{03_intensidad_corte_rodal.tex}
+
+\subsection{Detalle por Clase Diamétrica}
+
+La Tabla~\ref{tab:corte_detalle} desglosa el programa de cortas por género
+y clase diamétrica.
+
+\input{04_corte_por_clase_diametrica.tex}
+
+% ==============================================================================
+% SECCIÓN 4: TABLAS POR RODAL
+% ==============================================================================
+
+\section{Programa de Cortas por Rodal}
+
+A continuación se presentan las tablas detalladas de corta para cada rodal,
+especificando el año de intervención y la distribución por género y clase diamétrica.
+
+
+\end{document}

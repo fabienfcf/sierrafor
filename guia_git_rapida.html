@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guía Rápida: Git para Simulación Forestal</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+        
+        h1 {
+            color: #2c5282;
+            border-bottom: 4px solid #667eea;
+            padding-bottom: 15px;
+            margin-bottom: 30px;
+            font-size: 2.2em;
+        }
+        
+        h2 {
+            color: #4a5568;
+            margin-top: 35px;
+            margin-bottom: 15px;
+            font-size: 1.6em;
+            display: flex;
+            align-items: center;
+        }
+        
+        h2::before {
+            content: "📌";
+            margin-right: 10px;
+            font-size: 1.2em;
+        }
+        
+        h3 {
+            color: #667eea;
+            margin-top: 25px;
+            margin-bottom: 12px;
+            font-size: 1.3em;
+        }
+        
+        .warning {
+            background: #fff3cd;
+            border-left: 5px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        
+        .success {
+            background: #d4edda;
+            border-left: 5px solid #28a745;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        
+        .info {
+            background: #d1ecf1;
+            border-left: 5px solid #17a2b8;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        
+        code {
+            background: #f4f4f4;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            color: #e83e8c;
+        }
+        
+        pre {
+            background: #2d3748;
+            color: #f7fafc;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 15px 0;
+            border-left: 4px solid #667eea;
+        }
+        
+        pre code {
+            background: none;
+            color: #f7fafc;
+            padding: 0;
+        }
+        
+        .step {
+            background: #f8f9fa;
+            padding: 20px;
+            margin: 15px 0;
+            border-radius: 8px;
+            border-left: 5px solid #667eea;
+        }
+        
+        .step-number {
+            background: #667eea;
+            color: white;
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-right: 10px;
+            font-size: 1.1em;
+        }
+        
+        ul {
+            margin: 15px 0;
+            padding-left: 20px;
+        }
+        
+        li {
+            margin: 10px 0;
+            padding-left: 10px;
+        }
+        
+        .checklist {
+            list-style: none;
+            padding-left: 0;
+        }
+        
+        .checklist li::before {
+            content: "✅ ";
+            margin-right: 8px;
+        }
+        
+        .dont-list li::before {
+            content: "❌ ";
+            margin-right: 8px;
+        }
+        
+        .command-box {
+            background: #2d3748;
+            color: #48bb78;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .shortcut {
+            background: #e6fffa;
+            border: 2px dashed #38b2ac;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        
+        .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 2px solid #e2e8f0;
+            text-align: center;
+            color: #718096;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        th {
+            background: #667eea;
+            color: white;
+            font-weight: bold;
+        }
+        
+        tr:hover {
+            background: #f7fafc;
+        }
+        
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+            
+            .container {
+                box-shadow: none;
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌲 Guía Rápida: Guardar Versiones con Git</h1>
+        
+        <div class="info">
+            <strong>📍 Tu proyecto:</strong> Sistema de Simulación Forestal - Las Alazanas<br>
+            <strong>📂 Ubicación:</strong> <code>/home/fabien/.../Inventario Forestal 102025/R5/</code><br>
+            <strong>🔗 GitHub:</strong> <a href="https://github.com/fabienfcf/simulacion-forestal-las-alazanas2" target="_blank">github.com/fabienfcf/simulacion-forestal-las-alazanas2</a>
+        </div>
+
+        <h2>🚀 Flujo Diario (Lo que harás el 90% del tiempo)</h2>
+        
+        <div class="step">
+            <h3><span class="step-number">1</span>Trabajar normalmente en RStudio</h3>
+            <p>Modifica tus scripts <code>.R</code> como siempre</p>
+            <p>Guarda los cambios: <code>Ctrl + S</code></p>
+        </div>
+
+        <div class="step">
+            <h3><span class="step-number">2</span>Abrir Panel Git en RStudio</h3>
+            <p>Ve al panel <strong>Git</strong> (arriba derecha, junto a Environment)</p>
+            <p>Verás una lista de archivos modificados</p>
+        </div>
+
+        <div class="step">
+            <h3><span class="step-number">3</span>Marcar archivos a guardar</h3>
+            <p>✅ Marca el checkbox de los archivos que modificaste</p>
+            <p>Ejemplo: si editaste <code>02_modelos_crecimiento.R</code>, márcalo</p>
+        </div>
+
+        <div class="step">
+            <h3><span class="step-number">4</span>Hacer Commit</h3>
+            <p>Click en botón <strong>Commit</strong></p>
+            <p>Se abre una ventana → <strong>Escribe un mensaje</strong> en el cuadro de abajo:</p>
+            <div class="command-box">
+Fix: Correccion calculo area basal
+
+- Linea 145: formula actualizada
+- Ahora usa pi correcto
+            </div>
+            <p>Click en <strong>Commit</strong></p>
+        </div>
+
+        <div class="step">
+            <h3><span class="step-number">5</span>Subir a GitHub (Push)</h3>
+            <p>Click en botón <strong>Push</strong> (flecha verde ⬆️)</p>
+            <p>¡Listo! Tu código está respaldado en GitHub</p>
+        </div>
+
+        <div class="success">
+            <strong>✅ ¡Eso es todo!</strong> Estos 5 pasos son TODO lo que necesitas hacer cada vez.
+        </div>
+
+        <hr style="margin: 40px 0; border: none; border-top: 2px solid #e2e8f0;">
+
+        <h2>💻 Alternativa: Desde Terminal</h2>
+        
+        <p>Si prefieres usar comandos (más rápido cuando te acostumbres):</p>
+
+        <pre><code># 1. Ir a tu carpeta R5
+cd "/home/fabien/Documents/CONAFOR/Consultoria/Las Alazanas/PMF - 2026 - 2036/Inventario Forestal 102025/R5/"
+
+# 2. Ver qué archivos cambiaron
+git status
+
+# 3. Agregar archivo(s) modificado(s)
+git add 02_modelos_crecimiento.R
+
+# O agregar todos los archivos modificados:
+git add .
+
+# 4. Hacer commit con mensaje
+git commit -m "Fix: Correccion calculo area basal"
+
+# 5. Subir a GitHub
+git push</code></pre>
+
+        <h2>📝 Cómo Escribir Buenos Mensajes de Commit</h2>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Tipo</th>
+                    <th>Cuándo usarlo</th>
+                    <th>Ejemplo</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>Fix:</code></td>
+                    <td>Corrección de bug</td>
+                    <td>Fix: Corregida tasa mortalidad suprimidos</td>
+                </tr>
+                <tr>
+                    <td><code>Feature:</code></td>
+                    <td>Nueva funcionalidad</td>
+                    <td>Feature: Agregado modulo cortas selectivas</td>
+                </tr>
+                <tr>
+                    <td><code>Refactor:</code></td>
+                    <td>Reorganización código</td>
+                    <td>Refactor: Simplificado calculo volumen</td>
+                </tr>
+                <tr>
+                    <td><code>Docs:</code></td>
+                    <td>Documentación</td>
+                    <td>Docs: Actualizado README con ejemplos</td>
+                </tr>
+                <tr>
+                    <td><code>Test:</code></td>
+                    <td>Pruebas</td>
+                    <td>Test: Agregadas validaciones crecimiento</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="warning">
+            <strong>⚠️ Mensajes malos (evitar):</strong>
+            <ul class="dont-list">
+                <li>"actualizacion"</li>
+                <li>"cambios"</li>
+                <li>"fix"</li>
+                <li>"wip" (work in progress)</li>
+                <li>"asdf"</li>
+            </ul>
+        </div>
+
+        <div class="success">
+            <strong>✅ Mensajes buenos:</strong>
+            <ul class="checklist">
+                <li>"Fix: Corregido factor expansion en volumenes"</li>
+                <li>"Feature: Agregado calculo IMA por rodal"</li>
+                <li>"Refactor: Consolidadas funciones area basal"</li>
+                <li>"Docs: Agregados comentarios en modulo mortalidad"</li>
+            </ul>
+        </div>
+
+        <h2>🔍 Comandos Útiles</h2>
+
+        <h3>Ver historial de cambios</h3>
+        <pre><code># Ver últimos commits
+git log --oneline
+
+# Ver cambios de un archivo
+git log --follow modelov5/02_modelos_crecimiento.R</code></pre>
+
+        <h3>Ver qué cambió (antes de commit)</h3>
+        <pre><code># Ver diferencias
+git diff
+
+# Ver diferencias de un archivo específico
+git diff 02_modelos_crecimiento.R</code></pre>
+
+        <h3>Deshacer cambios (antes de commit)</h3>
+        <pre><code># Restaurar archivo a última versión guardada
+git restore 02_modelos_crecimiento.R
+
+# O desde RStudio: Panel Git → Click derecho → Revert</code></pre>
+
+        <h2>🆘 Solución de Problemas Comunes</h2>
+
+        <div class="step">
+            <h3>❌ "Push está en gris"</h3>
+            <p><strong>Causa:</strong> No has hecho commit</p>
+            <p><strong>Solución:</strong> Primero hacer Commit, luego Push</p>
+        </div>
+
+        <div class="step">
+            <h3>❌ "Commit message empty"</h3>
+            <p><strong>Causa:</strong> No escribiste mensaje</p>
+            <p><strong>Solución:</strong> Escribir mensaje en el cuadro antes de Commit</p>
+        </div>
+
+        <div class="step">
+            <h3>❌ "Authentication failed"</h3>
+            <p><strong>Causa:</strong> Token expiró o incorrecto</p>
+            <p><strong>Solución:</strong></p>
+            <pre><code># Configurar para que pida token nuevamente
+git config --global --unset credential.helper
+
+# En el próximo push, pega el token correcto</code></pre>
+        </div>
+
+        <div class="step">
+            <h3>❌ "Large files detected"</h3>
+            <p><strong>Causa:</strong> Intentaste subir archivo > 100 MB</p>
+            <p><strong>Solución:</strong></p>
+            <pre><code># Quitar archivo del commit
+git rm --cached archivo_grande.rds
+
+# Agregarlo a .gitignore
+echo "archivo_grande.rds" >> .gitignore
+
+# Commit nuevamente
+git add .gitignore
+git commit -m "Fix: Eliminado archivo grande"
+git push</code></pre>
+        </div>
+
+        <h2>📋 Checklist Semanal</h2>
+
+        <div class="shortcut">
+            <h3>Al final de cada sesión de trabajo:</h3>
+            <ul class="checklist">
+                <li>Guardar archivos (Ctrl+S)</li>
+                <li>Panel Git → Marcar archivos modificados</li>
+                <li>Commit con mensaje descriptivo</li>
+                <li>Push a GitHub</li>
+                <li>Verificar en GitHub que se subió correctamente</li>
+            </ul>
+        </div>
+
+        <h2>🎯 Atajos de RStudio</h2>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Acción</th>
+                    <th>Atajo</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Abrir ventana Commit</td>
+                    <td><code>Ctrl + Alt + M</code></td>
+                </tr>
+                <tr>
+                    <td>Ver diff de archivo</td>
+                    <td><code>Ctrl + Alt + D</code></td>
+                </tr>
+                <tr>
+                    <td>Pull (descargar cambios)</td>
+                    <td><code>Ctrl + Alt + L</code></td>
+                </tr>
+                <tr>
+                    <td>Push (subir cambios)</td>
+                    <td><code>Ctrl + Alt + K</code></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h2>🔗 Enlaces Útiles</h2>
+
+        <ul>
+            <li><strong>Tu repositorio:</strong> <a href="https://github.com/fabienfcf/simulacion-forestal-las-alazanas2" target="_blank">github.com/fabienfcf/simulacion-forestal-las-alazanas2</a></li>
+            <li><strong>Ver historial:</strong> <a href="https://github.com/fabienfcf/simulacion-forestal-las-alazanas2/commits/main" target="_blank">Commits en GitHub</a></li>
+            <li><strong>Generar nuevo token:</strong> <a href="https://github.com/settings/tokens" target="_blank">GitHub Tokens</a></li>
+        </ul>
+
+        <h2>💡 Consejos Finales</h2>
+
+        <div class="info">
+            <ul>
+                <li><strong>Commit frecuentemente:</strong> Cada vez que completes una función o corrijas un bug</li>
+                <li><strong>Push al menos 1 vez al día:</strong> Al terminar tu sesión de trabajo</li>
+                <li><strong>Mensajes descriptivos:</strong> Tu "yo del futuro" te lo agradecerá</li>
+                <li><strong>No subir datos grandes:</strong> Solo código (.R), GitHub rechaza archivos > 100 MB</li>
+                <li><strong>Verificar en GitHub:</strong> De vez en cuando verifica que tus cambios se subieron</li>
+            </ul>
+        </div>
+
+        <div class="success">
+            <h3>🎉 ¡Resumen Ultra-Corto!</h3>
+            <p style="font-size: 1.2em; font-weight: bold;">
+                Modificar código → Panel Git → Marcar archivos → Commit (con mensaje) → Push
+            </p>
+            <p style="margin-top: 10px;">Eso es TODO. 5 pasos. Cada vez. ✨</p>
+        </div>
+
+        <div class="footer">
+            <p><strong>Sistema de Simulación Forestal - Las Alazanas</strong></p>
+            <p>Guía creada: Enero 2025 | CONAFOR</p>
+            <p style="margin-top: 10px; font-size: 0.9em;">
+                💾 Guarda este archivo HTML para referencia futura<br>
+                🖨️ Puedes imprimirlo: Ctrl+P en el navegador
+            </p>
+        </div>
+    </div>
+</body>
+</html>
