@@ -36,3 +36,5 @@ backups/
 .DS_Store
 Thumbs.db
 Rplots.pdf
+Rplots.pdf
+*.pdf
