@@ -18,7 +18,7 @@ cat("\n[3/4] Cargando configuración de simulación...\n")
 # ==============================================================================
 
 PERIODO_SIMULACION <- 10  # años del ciclo de corta
-INICIO_SIMULACION <- 2025
+INICIO_SIMULACION <- 2026
 
 # ==============================================================================
 # 2. GÉNEROS OBJETIVO PARA SIMULACIÓN
@@ -40,14 +40,14 @@ SEMILLA_MORTALIDAD <- 42  # Para reproducibilidad
 # 4. RECLUTAMIENTO
 # ==============================================================================
 
-TASA_RECLUTAMIENTO <- 0.02  # 2% de la densidad actual por año
+TASA_RECLUTAMIENTO <- 0.01  # 2% de la densidad actual por año
 
 # Rango de clases de ingreso (diámetro en cm)
 RECLUTAMIENTO_D_MIN <- 7.5
-RECLUTAMIENTO_D_MAX <- 12.5
+RECLUTAMIENTO_D_MAX <- 8.5
 
 # Dominancia inicial de nuevos árboles
-RECLUTAMIENTO_DOMINANCIA <- 6  # Suprimidos (código 6)
+RECLUTAMIENTO_DOMINANCIA <- 3  # Suprimidos (código 6)
 
 # Altura inicial aproximada (m) por género
 RECLUTAMIENTO_ALTURA <- list(
@@ -94,7 +94,7 @@ crear_configuracion_simulacion <- function() {
     # ══════════════════════════════════════════════════════════════
     especies = ESPECIES,
     ecuaciones_volumen = ECUACIONES_VOLUMEN,
-    parametros_altura = PARAMETROS_ALTURA_DIAMETRO,
+    #parametros_altura = PARAMETROS_ALTURA_DIAMETRO,
     generos = GENEROS_OBJETIVO,
     crecimiento_base = setNames(
       CRECIMIENTO_DIAMETRICO$tasa_base_cm_año,
@@ -130,33 +130,33 @@ crear_configuracion_simulacion <- function() {
     # MUESTREO
     # ══════════════════════════════════════════════════════════════
     area_parcela_ha = AREA_PARCELA_HA,
-    area_parcela_regeneracion_ha = AREA_REGENERACION_M2/10000,
+    area_parcela_regeneracion_ha = AREA_REGENERACION_M2/10000 #,
     
     # ══════════════════════════════════════════════════════════════
     # FUNCIÓN DE CÁLCULO DE dh/dd
     # ══════════════════════════════════════════════════════════════
-    interpolar_dhdd = function(especie, diametro, dominancia) {
-      params <- obtener_parametros_altura(especie, dominancia)
-      
-      if (is.null(params)) {
-        warning(sprintf("No se encontraron parámetros para '%s', usando 0.15 m/cm", especie))
-        return(0.15)
-      }
-      
-      dhdd <- calcular_dhdd_chapman_richards(diametro, params$a, params$b, params$c)
-      
-      if (is.na(dhdd) || dhdd <= 0) {
-        warning(sprintf("Cálculo dh/dd falló para '%s' d=%.1f dom=%d, usando 0.15 m/cm",
-                        especie, diametro, dominancia))
-        return(0.15)
-      }
-      
-      return(dhdd)
-    }
-  )
-  
-  return(config)
-}
+#     interpolar_dhdd = function(especie, diametro, dominancia) {
+#       params <- obtener_parametros_altura(especie, dominancia)
+#       
+#       if (is.null(params)) {
+#         warning(sprintf("No se encontraron parámetros para '%s', usando 0.15 m/cm", especie))
+#         return(0.15)
+#       }
+#       
+#       dhdd <- calcular_dhdd_chapman_richards(diametro, params$a, params$b, params$c)
+#       
+#       if (is.na(dhdd) || dhdd <= 0) {
+#         warning(sprintf("Cálculo dh/dd falló para '%s' d=%.1f dom=%d, usando 0.15 m/cm",
+#                         especie, diametro, dominancia))
+#         return(0.15)
+#       }
+#       
+#       return(dhdd)
+#     }
+   )
+   
+   return(config)
+ }
 
 # ==============================================================================
 # 8. VALIDACIÓN
@@ -212,13 +212,13 @@ validar_configuracion <- function(config) {
                 config$reclut_d_min, config$reclut_d_max))
   }
   
-  # Parámetros altura
-  if (is.null(config$parametros_altura) || nrow(config$parametros_altura) == 0) {
-    errores <- c(errores, "✗ No se cargaron parámetros altura-diámetro (CRÍTICO)")
-  } else {
-    cat(sprintf("✓ Modelos altura-diámetro: %d especies\n", 
-                nrow(config$parametros_altura)))
-  }
+  # # Parámetros altura
+  # if (is.null(config$parametros_altura) || nrow(config$parametros_altura) == 0) {
+  #   errores <- c(errores, "✗ No se cargaron parámetros altura-diámetro (CRÍTICO)")
+  # } else {
+  #   cat(sprintf("✓ Modelos altura-diámetro: %d especies\n", 
+  #               nrow(config$parametros_altura)))
+  # }
   
   # Resultado final
   cat("\n")
@@ -227,7 +227,7 @@ validar_configuracion <- function(config) {
     cat("❌ ERRORES ENCONTRADOS:\n")
     cat("══════════════════════════════════════════════════════════\n")
     for (e in errores) cat(sprintf("  %s\n", e))
-    stop("\nConfiguraciónâœ inválida. Corrige los errores antes de continuar.")
+    stop("\nConfiguración inválida. Corrige los errores antes de continuar.")
   } else {
     cat("╔════════════════════════════════════════════════════════════╗\n")
     cat("║           ✓ CONFIGURACIÓN VÁLIDA - SISTEMA LISTO          ║\n")

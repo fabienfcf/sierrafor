@@ -64,24 +64,20 @@ ECUACIONES_VOLUMEN <- tribble(
 # Ecuación: h = a × (1 - exp(-b×d))^c
 # Derivada: dh/dd = a × c × b × exp(-b×d) × (1 - exp(-b×d))^(c-1)
 # ==============================================================================
-
-PARAMETROS_ALTURA_DIAMETRO <- tribble(
-  ~especie,                ~n,   ~r2,      ~a_intermedio, ~b_intermedio, ~c_intermedio, ~a_q1,   ~b_q1,   ~c_q1,   ~a_q3,   ~b_q3,   ~c_q3,
-  "Pinus pseudostrobus",   138,  0.5716,   21.058,        0.01499,       0.5583,        15.794,  0.01349, 0.4746,  26.323,  0.01649, 0.6421,
-  "Pinus teocote",   138,  0.5716,   21.058,        0.01499,       0.5583,        15.794,  0.01349, 0.4746,  26.323,  0.01649, 0.6421,  #buscar verdaderos parametros
-    "Pinus cembroides",      744,  0.6309,   20.334,        0.01390,       0.7051,        15.250,  0.01251, 0.5994,  25.417,  0.01529, 0.8109,
-  "Quercus rysophylla",    101,  0.7416,   13.107,        0.03533,       0.8225,        9.830,   0.03180, 0.6991,  16.384,  0.03886, 0.9459,
-  "Quercus laceyi",    101,  0.7416,   13.107,        0.03533,       0.8225,        9.830,   0.03180, 0.6991,  16.384,  0.03886, 0.9459, #buscar verdaderos parametros
-  "Quercus affinis",    101,  0.7416,   13.107,        0.03533,       0.8225,        9.830,   0.03180, 0.6991,  16.384,  0.03886, 0.9459, #buscar verdaderos parametros
-   "Quercus laeta",         306,  0.2877,   8.611,         0.06131,       0.6720,        9.000,   0.01839, 0.6000,  10.800,  0.09800, 0.8000
-)
-
-# Mapeo de especies sin parámetros específicos a especies equivalentes
-MAPEO_ESPECIES_ALTURA <- c(
-  # "Quercus affinis" = "Quercus rysophylla",
-  # "Quercus laceyi"  = "Quercus rysophylla",
-  # "Pinus teocote"   = "Pinus pseudostrobus"
-)
+# 
+# PARAMETROS_ALTURA_DIAMETRO <- tribble(
+#   ~especie,                ~n,   ~r2,      ~a, ~b, ~c,
+#   "Pinus pseudostrobus", 359, 0.6338, 205.096, 0.00055, 0.6783,
+#   "Pinus teocote", 79, 0.6496, 178.729, 0.00073, 0.6911,
+#   "Quercus affinis", 19, 0.1703, 14.470, 0.01502, 0.4210,
+#   "Quercus laeta", 723, 0.1709, 115.846, 0.00005, 0.4105,
+#   "Quercus rysophylla", 700, 0.1700, 117.098, 0.00011, 0.4366
+# )
+# 
+# # Mapeo de especies sin parámetros específicos a especies equivalentes
+# MAPEO_ESPECIES_ALTURA <- c(
+#   # "Quercus laceyi"  = "Quercus rysophylla"
+# )
 
 # ==============================================================================
 # 4. TASAS DE CRECIMIENTO DIAMÉTRICO BASE (cm/año)
@@ -90,7 +86,7 @@ MAPEO_ESPECIES_ALTURA <- c(
 CRECIMIENTO_DIAMETRICO <- tribble(
   ~genero,   ~tasa_base_cm_año, ~fuente,
   "Pinus",   0.40,              "Observaciones campo + literatura regional",
-  "Quercus", 0.30,              "Observaciones campo + literatura regional"
+  "Quercus", 0.25,              "Observaciones campo + literatura regional"
 )
 
 # ==============================================================================
@@ -113,52 +109,40 @@ obtener_ecuacion_volumen <- function(nombre_cientifico) {
   
   return(resultado)
 }
-
-#' @title Obtener parámetros de altura para una especie
-#' @param nombre_cientifico Nombre científico
-#' @param dominancia Código de dominancia (1-6) para seleccionar cuartil
-#' @return Lista con parámetros (a, b, c) o tibble completo si dominancia=NULL
-#' @examples
-#' obtener_parametros_altura("Pinus pseudostrobus", dominancia = 1)
-obtener_parametros_altura <- function(nombre_cientifico, dominancia = NULL) {
-  
-  # Aplicar mapeo si existe
-  especie_buscar <- nombre_cientifico
-  if (nombre_cientifico %in% names(MAPEO_ESPECIES_ALTURA)) {
-    especie_buscar <- MAPEO_ESPECIES_ALTURA[nombre_cientifico]
-    message(sprintf("Usando parámetros de '%s' para '%s'", 
-                    especie_buscar, nombre_cientifico))
-  }
-  
-  params <- PARAMETROS_ALTURA_DIAMETRO %>%
-    filter(especie == especie_buscar)
-  
-  if (nrow(params) == 0) {
-    warning(sprintf("Especie '%s' no encontrada en parámetros altura-diámetro", 
-                    nombre_cientifico))
-    return(NULL)
-  }
-  
-  # Si no se especifica dominancia, retornar toda la fila
-  if (is.null(dominancia)) {
-    return(params)
-  }
-  
-  # Seleccionar parámetros según dominancia
-  if (dominancia == 6) {
-    # Suprimidos → Q1 (árboles pequeños)
-    return(list(a = params$a_q1, b = params$b_q1, c = params$c_q1))
-  } else if (dominancia %in% c(3, 5)) {
-    # Intermedios → Q2
-    return(list(a = params$a_intermedio, b = params$b_intermedio, c = params$c_intermedio))
-  } else if (dominancia %in% c(1, 2, 4)) {
-    # Dominantes → Q3 (árboles grandes)
-    return(list(a = params$a_q3, b = params$b_q3, c = params$c_q3))
-  } else {
-    # Default: intermedios
-    return(list(a = params$a_intermedio, b = params$b_intermedio, c = params$c_intermedio))
-  }
-}
+#' 
+#' #' @title Obtener parámetros de altura para una especie
+#' #' @param nombre_cientifico Nombre científico
+#' #' @param dominancia Código de dominancia (1-6) para seleccionar cuartil
+#' #' @return Lista con parámetros (a, b, c) o tibble completo si dominancia=NULL
+#' #' @examples
+#' #' obtener_parametros_altura("Pinus pseudostrobus", dominancia = 1)
+#' obtener_parametros_altura <- function(nombre_cientifico, dominancia = NULL) {
+#'   
+#'   # Aplicar mapeo si existe
+#'   especie_buscar <- nombre_cientifico
+#'   if (nombre_cientifico %in% names(MAPEO_ESPECIES_ALTURA)) {
+#'     especie_buscar <- MAPEO_ESPECIES_ALTURA[nombre_cientifico]
+#'     message(sprintf("Usando parámetros de '%s' para '%s'", 
+#'                     especie_buscar, nombre_cientifico))
+#'   }
+#'   
+#'   params <- PARAMETROS_ALTURA_DIAMETRO %>%
+#'     filter(especie == especie_buscar)
+#'   
+#'   if (nrow(params) == 0) {
+#'     warning(sprintf("Especie '%s' no encontrada en parámetros altura-diámetro", 
+#'                     nombre_cientifico))
+#'     return(NULL)
+#'   }
+#'   
+#'   # Si no se especifica dominancia, retornar toda la fila
+#'   if (is.null(dominancia)) {
+#'     return(params)
+#'   }
+#'   
+#'   # UNA SOLA CURVA POR ESPECIE - mismos parámetros para todas las dominancias
+#'   return(list(a = params$a, b = params$b, c = params$c))
+#' }
 
 #' @title Obtener tasa de crecimiento diamétrico para un género
 #' @param genero "Pinus" o "Quercus"
@@ -178,25 +162,25 @@ obtener_tasa_crecimiento <- function(genero) {
   return(tasa)
 }
 
-#' @title Calcular dh/dd desde parámetros Chapman-Richards
-#' @param d Diámetro normal (cm)
-#' @param a,b,c Parámetros de Chapman-Richards
-#' @return Tasa de cambio dh/dd (m/cm)
-calcular_dhdd_chapman_richards <- function(d, a, b, c) {
-  if (is.na(a) | is.na(b) | is.na(c) | d <= 0) {
-    return(NA_real_)
-  }
-  
-  exp_term <- exp(-b * d)
-  base_term <- 1 - exp_term
-  
-  if (base_term <= 0) return(0)
-  
-  dhdd <- a * c * b * exp_term * (base_term ^ (c - 1))
-  
-  # Limitar a rango razonable
-  return(max(0.05, min(dhdd, 0.50)))
-}
+#' #' @title Calcular dh/dd desde parámetros Chapman-Richards
+#' #' @param d Diámetro normal (cm)
+#' #' @param a,b,c Parámetros de Chapman-Richards
+#' #' @return Tasa de cambio dh/dd (m/cm)
+#' calcular_dhdd_chapman_richards <- function(d, a, b, c) {
+#'   if (is.na(a) | is.na(b) | is.na(c) | d <= 0) {
+#'     return(NA_real_)
+#'   }
+#'   
+#'   exp_term <- exp(-b * d)
+#'   base_term <- 1 - exp_term
+#'   
+#'   if (base_term <= 0) return(0)
+#'   
+#'   dhdd <- a * c * b * exp_term * (base_term ^ (c - 1))
+#'   
+#'   # Limitar a rango razonable
+#'   return(max(0.05, min(dhdd, 0.50)))
+#' }
 
 # ==============================================================================
 # RESUMEN DE CARGA
@@ -204,7 +188,7 @@ calcular_dhdd_chapman_richards <- function(d, a, b, c) {
 
 cat(sprintf("  ✓ Especies catalogadas:      %d\n", nrow(ESPECIES)))
 cat(sprintf("  ✓ Ecuaciones de volumen:     %d\n", nrow(ECUACIONES_VOLUMEN)))
-cat(sprintf("  ✓ Modelos altura-diámetro:   %d\n", nrow(PARAMETROS_ALTURA_DIAMETRO)))
+#cat(sprintf("  ✓ Modelos altura-diámetro:   %d\n", nrow(PARAMETROS_ALTURA_DIAMETRO)))
 cat(sprintf("  ✓ Géneros con tasa de crec.: %d\n", nrow(CRECIMIENTO_DIAMETRICO)))
 cat("  ✓ Funciones disponibles:\n")
 cat("      obtener_ecuacion_volumen(especie)\n")

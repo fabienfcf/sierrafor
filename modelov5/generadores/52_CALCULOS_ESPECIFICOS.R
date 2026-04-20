@@ -104,8 +104,8 @@ calcular_diversidad <- function(arboles_df,
 #' @param factor_ajuste_d Factor para ajustar diámetro tocones (default: 0.85)
 #' @return Lista con muertos_pie y tocones
 #' @details
-#'   - Muertos en pie: dominancia = 7
-#'   - Tocones: dominancia = 8
+#'   - Muertos en pie: dominancia = 7-8
+#'   - Tocones: dominancia = 9
 #'   - Diámetro tocón ajustado: d_medido × factor_ajuste_d
 #'   - Altura inferida con ecuaciones alométricas
 calcular_muertos_tocones <- function(arboles_df, 
@@ -130,11 +130,11 @@ calcular_muertos_tocones <- function(arboles_df,
   n_sitios <- n_distinct(arboles_df$muestreo)
   
   # ============================================================================
-  # MUERTOS EN PIE (dominancia = 7, excluir tocones)
+  # MUERTOS EN PIE (dominancia = 7 y 8, excluir tocones)
   # ============================================================================
   
   muertos_pie <- arboles_df %>%
-    filter(dominancia == 7) %>%
+    filter(dominancia %in% c(7, 8)) %>%
     mutate(
       area_basal = calcular_area_basal(diametro_normal)
     ) %>%
@@ -154,14 +154,14 @@ calcular_muertos_tocones <- function(arboles_df,
     select(rodal, genero_grupo, n_muertos_obs, n_ha, ab_ha_m2, vol_ha_m3, d_medio_cm)
   
   # ============================================================================
-  # TOCONES (dominancia = 8)
+  # TOCONES (dominancia = 9)
   # ============================================================================
   
   # Ajustar diámetro (medido al nivel del suelo → 1.3m)
   # Inferir altura usando ecuaciones alométricas del género
   
   tocones <- arboles_df %>%
-    filter(dominancia == 8) %>%
+    filter(dominancia == 9) %>%
     mutate(
       # Ajustar diámetro
       d_ajustado = diametro_normal * factor_ajuste_d,

@@ -1,609 +1,655 @@
 # ==============================================================================
-# 14_OPTIMIZADOR_CORTAS.R - MÉTODO ICA-LIOCOURT FINAL
-# Versión correcta: ICA define CUÁNTO, Liocourt define DÓNDE
+# 14_OPTIMIZADOR_CORTAS.R - DISTANCE À COURBE LIOCOURT
+# ==============================================================================
+# 
+# PHILOSOPHIE:
+#   1. ICA fixe le volume à couper (sustainability)
+#   2. Priorité: Arbres matures d'abord (>= D_MADUREZ)
+#   3. Liocourt: Sélection par DISTANCE à la courbe idéale
+#
+# LOGIQUE DISTANCE:
+#   - Chaque arbre a une "distance" à la courbe Liocourt
+#   - Distance = position dans classe - n_liocourt
+#   - Arbres avec distance > 0 = AU-DESSUS de la courbe (excédent)
+#   - Arbres avec distance ≤ 0 = SUR/SOUS la courbe (à conserver)
+#   - Sélection: distance décroissante jusqu'à vol_objetivo
+#
 # ==============================================================================
 
 library(tidyverse)
 
 if (!exists("CONFIG")) {
-  stop("❌ CONFIG no está cargado. Ejecuta: source('config/01_parametros_configuracion.R')")
+  stop("❌ CONFIG no cargado. Ejecuta: source('01_parametros_configuracion.R')")
 }
 
 # ==============================================================================
-# CALCULAR DISTRIBUCIÓN LIOCOURT COMO GUÍA
+# CALCULAR VOLUMEN OBJETIVO (STEP 1)
 # ==============================================================================
 
-#' @title Calcular distribución Liocourt como guía de estructura
-#' @description NO ajusta N_ref, solo identifica clases sobrepobladas
-#' 
-#' @param arboles_vivos Data frame con árboles vivos
-#' @param q Cociente de Liocourt (define FORMA, no magnitud)
-#' @param tolerancia Tolerancia % para considerar "equilibrado"
-#' @param amplitud Amplitud de clase diamétrica (cm)
-#' 
-#' @return Data frame con diagnóstico por clase
-
-calcular_distribucion_liocourt_guia <- function(arboles_vivos, 
-                                                q = 1.7,
-                                                tolerancia = 20,
-                                                amplitud = 5) {
+calcular_volumen_objetivo <- function(arboles_vivos, 
+                                      config = CONFIG,
+                                      corte_config) {
   
-  # Clasificar árboles
-  arboles_clasificados <- arboles_vivos %>%
-    mutate(clase_d = floor(diametro_normal / amplitud) * amplitud) %>%
-    filter(!is.na(clase_d))
+  rodal_actual <- unique(arboles_vivos$rodal)[1]
+  archivo_ica <- "resultados/31_ica_por_rodal.csv"
   
-  if (nrow(arboles_clasificados) == 0) {
-    warning("No hay árboles para clasificar")
-    return(NULL)
+  if (!file.exists(archivo_ica)) {
+    stop("❌ Archivo ICA no encontrado: ", archivo_ica)
   }
   
-  # Distribución actual
-  dist_actual <- arboles_clasificados %>%
+  # Cargar ICA pre-calculado
+  ica_data <- read.csv(archivo_ica)
+  ica_rodal <- ica_data %>% filter(rodal == rodal_actual)
+  
+  if (nrow(ica_rodal) == 0) {
+    stop("❌ ICA no encontrado para rodal ", rodal_actual)
+  }
+  
+  # Extraer valores
+  ica_anual_m3_ha <- ica_rodal$ICA_m3_ha
+  superficie_ha <- first(arboles_vivos$superficie_corta_ha)
+  
+  # Calcular volumen objetivo por ha
+  ica_10anos_m3_ha <- ica_anual_m3_ha * 10
+  vol_objetivo_m3_ha <- ica_10anos_m3_ha * (corte_config$intensidad_pct / 100)
+  
+  cat("\n╔═══════════════════════════════════════════════════════════╗\n")
+  cat("║  VOLUMEN OBJETIVO (ICA)                                   ║\n")
+  cat("╚═══════════════════════════════════════════════════════════╝\n")
+  cat(sprintf("  ICA anual:        %.3f m³/ha/año\n", ica_anual_m3_ha))
+  cat(sprintf("  ICA 10 años:      %.2f m³/ha\n", ica_10anos_m3_ha))
+  cat(sprintf("  Intensidad:       %d%%\n", corte_config$intensidad_pct))
+  cat(sprintf("  ▶ Vol objetivo:   %.2f m³/ha\n", vol_objetivo_m3_ha))
+  cat(sprintf("  Superficie UMM:   %.2f ha\n", superficie_ha))
+  cat(sprintf("  ▶ Vol total UMM:  %.2f m³\n\n", vol_objetivo_m3_ha * superficie_ha))
+  
+  list(
+    vol_objetivo_m3_ha = vol_objetivo_m3_ha,
+    vol_objetivo_total = vol_objetivo_m3_ha * superficie_ha,
+    ica_anual_m3_ha = ica_anual_m3_ha,
+    superficie_ha = superficie_ha
+  )
+}
+
+# ==============================================================================
+# MARCAR ÁRBOLES MADUROS (STEP 2)
+# ==============================================================================
+
+marcar_maduros <- function(arboles_vivos, 
+                           vol_restante_m3_ha,
+                           corte_config,
+                           config = CONFIG) {
+  
+  cat("╔═══════════════════════════════════════════════════════════╗\n")
+  cat("║  PASO 1: ÁRBOLES MADUROS                                  ║\n")
+  cat("╚═══════════════════════════════════════════════════════════╝\n")
+  
+  superficie_ha <- first(arboles_vivos$superficie_corta_ha)
+  num_muestreos <- first(arboles_vivos$num_muestreos_realizados)
+  area_muestreada_ha <- num_muestreos * config$area_parcela_ha
+  
+  # Identificar maduros
+  candidatos_maduros <- arboles_vivos %>%
+    mutate(
+      d_madurez = case_when(
+        genero_grupo == "Pinus" ~ config$d_madurez$Pinus,
+        genero_grupo == "Quercus" ~ config$d_madurez$Quercus,
+        TRUE ~ 999
+      ),
+      es_maduro = diametro_normal >= d_madurez,
+      protegido = case_when(
+        genero_grupo == "Pinus" & corte_config$proteger_maduros_pinus ~ TRUE,
+        genero_grupo == "Quercus" & corte_config$proteger_maduros_quercus ~ TRUE,
+        TRUE ~ FALSE
+      )
+    ) %>%
+    filter(es_maduro, !protegido)
+  
+  if (nrow(candidatos_maduros) == 0) {
+    cat("  ℹ️  No hay árboles maduros disponibles\n")
+    cat(sprintf("  Vol restante: %.2f m³/ha\n\n", vol_restante_m3_ha))
+    return(list(
+      marcados = tibble(),
+      vol_marcado_m3_ha = 0,
+      vol_restante_m3_ha = vol_restante_m3_ha
+    ))
+  }
+  
+  # Estadísticas maduros
+  stats_maduros <- candidatos_maduros %>%
+    group_by(genero_grupo) %>%
+    summarise(
+      n = n(),
+      vol_total = sum(volumen_m3),
+      .groups = "drop"
+    ) %>%
+    mutate(
+      n_ha = n / area_muestreada_ha,
+      vol_m3_ha = vol_total / area_muestreada_ha
+    )
+  
+  cat("  Disponibles:\n")
+  for (i in 1:nrow(stats_maduros)) {
+    cat(sprintf("    %s: %d árboles (%.1f/ha), %.2f m³/ha\n",
+                stats_maduros$genero_grupo[i],
+                stats_maduros$n[i],
+                stats_maduros$n_ha[i],
+                stats_maduros$vol_m3_ha[i]))
+  }
+  
+  # Ordenar: gros d'abord
+  candidatos_maduros <- candidatos_maduros %>%
+    arrange(desc(diametro_normal))
+  
+  # Selección greedy
+  vol_acum <- 0
+  vol_objetivo_inventario <- vol_restante_m3_ha * area_muestreada_ha
+  marcados <- tibble()
+  
+  for (i in 1:nrow(candidatos_maduros)) {
+    if (vol_acum >= vol_objetivo_inventario) break
+    
+    arbol <- candidatos_maduros[i, ]
+    marcados <- bind_rows(marcados, arbol)
+    vol_acum <- vol_acum + arbol$volumen_m3
+  }
+  
+  vol_marcado_m3_ha <- vol_acum / area_muestreada_ha
+  vol_restante_m3_ha <- vol_restante_m3_ha - vol_marcado_m3_ha
+  
+  cat(sprintf("\n  ▶ Marcados: %d árboles, %.2f m³/ha\n", 
+              nrow(marcados), vol_marcado_m3_ha))
+  cat(sprintf("  ▶ Restante: %.2f m³/ha\n\n", 
+              max(0, vol_restante_m3_ha)))
+  
+  list(
+    marcados = marcados,
+    vol_marcado_m3_ha = vol_marcado_m3_ha,
+    vol_restante_m3_ha = max(0, vol_restante_m3_ha)
+  )
+}
+
+# ==============================================================================
+# FUNCIÓN MODIFICADA: calcular_distribucion_liocourt
+# ==============================================================================
+# 
+# CAMBIO PRINCIPAL:
+#   - N_REF ya NO se extrae de la distribución real de árboles
+#   - N_REF viene de N_REF_LIOCOURT_POR_UMM (definido arbitrariamente)
+#
+# VENTAJAS:
+#   1. Curva Liocourt INDEPENDIENTE de la densidad actual
+#   2. Permite definir objetivos de manejo por UMM
+#   3. Más control sobre la estructura deseada del bosque
+#
+# ==============================================================================
+
+calcular_distribucion_liocourt <- function(arboles_vivos,
+                                           rodal_id,  # ← NUEVO PARÁMETRO
+                                           q = Q_FACTOR,
+                                           tolerancia = TOLERANCIA_EQUILIBRIO) {
+  
+  # Clasificar por clase diamétrica (5 cm)
+  dist_actual <- arboles_vivos %>%
+    mutate(clase_d = floor(diametro_normal / 5) * 5) %>%
     group_by(clase_d) %>%
     summarise(
       n_actual = n(),
-      vol_actual = sum(volumen_m3, na.rm = TRUE),
-      vol_medio = mean(volumen_m3, na.rm = TRUE),
+      vol_total = sum(volumen_m3),
       .groups = "drop"
     ) %>%
     arrange(clase_d)
   
   if (nrow(dist_actual) == 0) return(NULL)
   
-  # ============================================================================
-  # CLAVE: Usar distribución ACTUAL como base (no ajustar)
-  # ============================================================================
+  # ════════════════════════════════════════════════════════════════════════
+  # CAMBIO CRÍTICO: N_REF ARBITRARIO (no extraído de datos reales)
+  # ════════════════════════════════════════════════════════════════════════
   
-  # Clase de referencia = clase con más árboles
-  clase_ref <- dist_actual %>%
-    arrange(desc(n_actual)) %>%
-    slice(1) %>%
-    pull(clase_d)
+  clase_ref <- CLASE_REFERENCIA_LIOCOURT
   
-  n_ref <- dist_actual %>%
-    filter(clase_d == clase_ref) %>%
-    pull(n_actual)
+  # ANTES (versión antigua):
+  # n_ref <- dist_actual %>%
+  #   filter(clase_d == clase_ref) %>%
+  #   pull(n_actual)
   
-  cat("\n[DISTRIBUCIÓN LIOCOURT - GUÍA DE ESTRUCTURA]\n")
-  cat("═══════════════════════════════════════════════════════════\n")
-  cat(sprintf("  Clase referencia: %d cm (n=%d)\n", clase_ref, n_ref))
-  cat(sprintf("  Q-factor: %.2f\n", q))
-  cat(sprintf("  Tolerancia: ±%d%%\n\n", tolerancia))
+  # AHORA (versión nueva):
+  n_ref <- obtener_n_ref_liocourt(rodal_id)
   
-  # Parámetros
+  # Verificar que n_ref es válido
+  if (is.na(n_ref) || n_ref <= 0) {
+    warning(sprintf("⚠️ N_REF inválido para UMM %d, usando 10 árb/ha", rodal_id))
+    n_ref <- 10
+  }
+  
+  # ════════════════════════════════════════════════════════════════════════
+  # CALCULAR CURVA LIOCOURT IDEAL
+  # ════════════════════════════════════════════════════════════════════════
+  
+  # Rango de clases diamétricas
   d_min <- min(dist_actual$clase_d)
   d_max <- max(dist_actual$clase_d)
-  clases <- seq(d_min, d_max, by = amplitud)
+  clases <- seq(d_min, d_max, by = 5)
   
-  # Distribución objetivo según Liocourt
-  dist_objetivo <- data.frame(clase_d = clases) %>%
+  # Distribución Liocourt: N(d) = N_ref × q^((d_ref - d) / amplitud)
+  dist_liocourt <- data.frame(clase_d = clases) %>%
     mutate(
-      # Índice desde clase de referencia
-      idx = (clase_ref - clase_d) / amplitud,
-      
-      # N_objetivo = N_ref × q^idx
-      n_objetivo = round(n_ref * q^idx)
+      idx = (clase_ref - clase_d) / 5,
+      n_liocourt = round(n_ref * q^idx)
     ) %>%
     left_join(dist_actual, by = "clase_d") %>%
     mutate(
       n_actual = replace_na(n_actual, 0),
-      vol_actual = replace_na(vol_actual, 0),
-      vol_medio = replace_na(vol_medio, 0),
-      
-      # Ratio y diferencia
-      ratio = ifelse(n_objetivo > 0, n_actual / n_objetivo, NA),
-      diferencia_pct = ifelse(n_objetivo > 0, 
-                              ((n_actual - n_objetivo) / n_objetivo) * 100, 
-                              NA_real_),
-      
-      # Diagnóstico
-      diagnostico = case_when(
-        n_objetivo == 0 ~ "Sin objetivo",
-        abs(diferencia_pct) <= tolerancia ~ "Equilibrado",
-        diferencia_pct > tolerancia ~ "Sobrepoblado",
-        diferencia_pct < -tolerancia ~ "Subpoblado",
-        TRUE ~ "Equilibrado"
-      ),
-      
-      # Prioridad de corta: sobrepoblación × volumen medio
-      prioridad_corta = ifelse(
-        diagnostico == "Sobrepoblado" & n_actual > 0,
-        (diferencia_pct / 100) * vol_medio * n_actual,  # Prioridad total de la clase
-        0
-      )
+      vol_total = replace_na(vol_total, 0),
+      excedente = n_actual - n_liocourt,
+      excedente_pct = ifelse(n_liocourt > 0, 
+                             (excedente / n_liocourt) * 100, 
+                             0)
     ) %>%
-    arrange(desc(prioridad_corta))
+    arrange(clase_d)
   
-  # Resumen diagnóstico
-  sobrepobladas <- dist_objetivo %>% filter(diagnostico == "Sobrepoblado")
-  equilibradas <- dist_objetivo %>% filter(diagnostico == "Equilibrado")
-  subpobladas <- dist_objetivo %>% filter(diagnostico == "Subpoblado")
+  # ════════════════════════════════════════════════════════════════════════
+  # REPORTE
+  # ════════════════════════════════════════════════════════════════════════
   
-  cat("[DIAGNÓSTICO]\n")
-  cat(sprintf("  Sobrepobladas:  %d clases\n", nrow(sobrepobladas)))
-  cat(sprintf("  Equilibradas:   %d clases\n", nrow(equilibradas)))
-  cat(sprintf("  Subpobladas:    %d clases\n\n", nrow(subpobladas)))
+  cat("╔═══════════════════════════════════════════════════════════╗\n")
+  cat("║  DISTRIBUCIÓN LIOCOURT (GUÍA)                             ║\n")
+  cat("╚═══════════════════════════════════════════════════════════╝\n")
+  cat(sprintf("  UMM: %d\n", rodal_id))
+  cat(sprintf("  Clase ref: %d cm\n", clase_ref))
+  cat(sprintf("  N_REF (arbitrario): %d árb/ha\n", n_ref))
+  cat(sprintf("  Q-factor: %.2f\n", q))
+  cat(sprintf("  Tolerancia: ±%d%%\n\n", tolerancia))
   
-  if (nrow(sobrepobladas) > 0) {
-    cat("  Clases prioritarias para corta:\n")
-    for (i in 1:min(5, nrow(sobrepobladas))) {
-      clase <- sobrepobladas[i, ]
-      cat(sprintf("    %d. Clase %d cm: %+.0f%% (n=%d, vol_medio=%.2f m³)\n",
-                  i, clase$clase_d, clase$diferencia_pct, 
-                  clase$n_actual, clase$vol_medio))
+  # Densidad actual en clase de referencia (para comparación)
+  n_actual_ref <- dist_actual %>%
+    filter(clase_d == clase_ref) %>%
+    pull(n_actual)
+  
+  if (length(n_actual_ref) == 0) {
+    n_actual_ref <- 0
+  }
+  
+  cat(sprintf("  ℹ️  Densidad ACTUAL en clase ref: %d árb/ha\n", n_actual_ref))
+  cat(sprintf("  ℹ️  Densidad OBJETIVO (N_REF): %d árb/ha\n", n_ref))
+  
+  if (n_actual_ref > n_ref) {
+    cat(sprintf("  → Clase ref está SOBREPOBLADA (+%d árb/ha)\n\n", 
+                n_actual_ref - n_ref))
+  } else if (n_actual_ref < n_ref) {
+    cat(sprintf("  → Clase ref está SUBPOBLADA (-%d árb/ha)\n\n", 
+                n_ref - n_actual_ref))
+  } else {
+    cat("  → Clase ref está EN EQUILIBRIO\n\n")
+  }
+  
+  # Mostrar clases con excedente
+  clases_excedentes <- dist_liocourt %>%
+    filter(excedente > 0) %>%
+    arrange(desc(excedente_pct))
+  
+  if (nrow(clases_excedentes) > 0) {
+    cat("  Clases sobrepobladas (respecto a curva ideal):\n")
+    for (i in 1:min(5, nrow(clases_excedentes))) {
+      cat(sprintf("    %d. Clase %d cm: +%.0f%% (%d árboles exceso)\n",
+                  i,
+                  clases_excedentes$clase_d[i],
+                  clases_excedentes$excedente_pct[i],
+                  clases_excedentes$excedente[i]))
     }
     cat("\n")
   }
   
-  return(dist_objetivo)
+  dist_liocourt
 }
 
+
 # ==============================================================================
-# CALCULAR VOLUMEN OBJETIVO
+# MARCAR SEGÚN LIOCOURT - DISTANCE À COURBE (STEP 4)
 # ==============================================================================
 
-calcular_volumen_objetivo <- function(arboles_vivos, 
-                                      config = CONFIG, 
-                                      corte_config,
-                                      arboles_inicial = NULL,
-                                      arboles_año_anterior = NULL,
-                                      año_actual = NULL) {
+marcar_liocourt_distance <- function(arboles_disponibles,
+                                     dist_liocourt,
+                                     vol_restante_m3_ha,
+                                     corte_config,
+                                     config = CONFIG) {
   
-  vol_actual <- sum(arboles_vivos$volumen_m3, na.rm = TRUE)
+  cat("╔═══════════════════════════════════════════════════════════╗\n")
+  cat("║  PASO 2: LIOCOURT (Distance à courbe)                    ║\n")
+  cat("╚═══════════════════════════════════════════════════════════╝\n")
   
-  # ============================================================================
-  # 1. CALCULAR ICA SI HAY DATOS HISTÓRICOS
-  # ============================================================================
-  
-  ica_info <- NULL
-  
-  if (!is.null(arboles_inicial) && !is.null(año_actual) && año_actual > 0) {
-    vol_inicial <- sum(arboles_inicial$volumen_m3, na.rm = TRUE)
-    años_transcurridos <- año_actual
-    
-    ica_anual <- (vol_actual - vol_inicial) / años_transcurridos
-    ica_total_pmf <- ica_anual * config$periodo
-    
-    ica_info <- list(
-      ica_anual = ica_anual,
-      ica_total_pmf = ica_total_pmf,
-      vol_inicial = vol_inicial,
-      vol_actual = vol_actual,
-      años = años_transcurridos
-    )
+  if (vol_restante_m3_ha <= 0) {
+    cat("  ✓ Objetivo ya alcanzado\n\n")
+    return(list(marcados = tibble(), vol_marcado_m3_ha = 0))
   }
   
-  # ============================================================================
-  # 2. CALCULAR VOLUMEN OBJETIVO SEGÚN MÉTODO
-  # ============================================================================
+  num_muestreos <- first(arboles_disponibles$num_muestreos_realizados)
+  area_muestreada_ha <- num_muestreos * config$area_parcela_ha
+  superficie_ha <- first(arboles_disponibles$superficie_corta_ha)
+  vol_objetivo_inventario <- vol_restante_m3_ha * area_muestreada_ha
   
-  if (corte_config$metodo == "ICA") {
+  # STEP 1: Calcular position de cada arbre dans sa clase
+  # ORDRE: ALÉATOIRE (neutre genre)
+  # Seed basé sur rodal pour reproductibilité
+  rodal_actual <- unique(arboles_disponibles$rodal)[1]
+  set.seed(rodal_actual * 12345)  # Seed reproductible
+  
+  arboles_con_posicion <- arboles_disponibles %>%
+    mutate(clase_d = floor(diametro_normal / 5) * 5) %>%
+    arrange(clase_d, runif(n())) %>%  # Ordre aléatoire dans classe
+    group_by(clase_d) %>%
+    mutate(
+      position = row_number()  # 1 à N, ordre aléatoire
+    ) %>%
+    ungroup()
+  
+  # STEP 2: Calculer distance à courbe Liocourt
+  arboles_con_distance <- arboles_con_posicion %>%
+    left_join(
+      dist_liocourt %>% select(clase_d, n_liocourt),
+      by = "clase_d"
+    ) %>%
+    mutate(
+      n_liocourt = replace_na(n_liocourt, 0),
+      distance = position - n_liocourt
+    )
+  
+  # STEP 5: Ne garder QUE les arbres avec distance > 0 (au-dessus de la courbe)
+  candidatos <- arboles_con_distance %>%
+    filter(distance > 0)
+  
+  if (nrow(candidatos) == 0) {
+    cat("  ℹ️  Aucun arbre au-dessus de la courbe Liocourt\n")
+    cat("  → Distribution déjà équilibrée\n\n")
+    return(list(marcados = tibble(), vol_marcado_m3_ha = 0))
+  }
+  
+  cat(sprintf("  Candidatos (distance > 0): %d árboles\n", nrow(candidatos)))
+  
+  # Statistiques distances
+  stats_distance <- candidatos %>%
+    summarise(
+      distance_max = max(distance),
+      distance_mean = mean(distance),
+      distance_min = min(distance),
+      .groups = "drop"
+    )
+  
+  cat(sprintf("  Distance max: %.0f | moyenne: %.1f | min: %.0f\n\n",
+              stats_distance$distance_max,
+              stats_distance$distance_mean,
+              stats_distance$distance_min))
+  
+  # STEP 3: Trier par distance décroissante (plus grand excédent en premier)
+  candidatos <- candidatos %>%
+    arrange(desc(distance))
+  
+  # STEP 4: Sélection avec contrôle proportions (roll dice)
+  prop_quercus_objetivo <- corte_config$proporcion_quercus
+  
+  if (!is.null(prop_quercus_objetivo) && !is.na(prop_quercus_objetivo)) {
     
-    if (is.null(ica_info)) {
-      cat("\n[VOLUMEN OBJETIVO - MÉTODO ICA]\n")
-      cat("  ⚠️ No hay datos históricos para calcular ICA\n")
-      cat("  💡 Usa método EXISTENCIAS para el primer año\n\n")
-      return(list(
-        vol_objetivo = 0, 
-        metodo_usado = "ICA", 
-        dist_obj = NULL,
-        ica_info = NULL
-      ))
+    cat("  → Contrôle proportions actif:\n")
+    cat(sprintf("     Objetivo: %.0f%% Quercus / %.0f%% Pinus\n\n",
+                prop_quercus_objetivo * 100,
+                (1 - prop_quercus_objetivo) * 100))
+    
+    # Sélection avec roll dice
+    set.seed(unique(arboles_disponibles$rodal)[1] * 54321)  # Seed pour dice
+    
+    vol_acum <- 0
+    vol_quercus <- 0
+    vol_pinus <- 0
+    marcados <- tibble()
+    
+    for (i in 1:nrow(candidatos)) {
+      if (vol_acum >= vol_objetivo_inventario) break
+      
+      arbol <- candidatos[i, ]
+      
+      # Calcular proporciones actuales
+      if (vol_acum > 0) {
+        prop_actual_quercus <- vol_quercus / vol_acum
+        prop_actual_pinus <- vol_pinus / vol_acum
+      } else {
+        # Primeros árboles: usar objetivos
+        prop_actual_quercus <- prop_quercus_objetivo
+        prop_actual_pinus <- 1 - prop_quercus_objetivo
+      }
+      
+      # Calcular probabilidad de aceptación
+      if (arbol$genero_grupo == "Quercus") {
+        # Si Quercus sous-représenté, prob élevée
+        prob_accept <- min(1.0, prop_quercus_objetivo / max(prop_actual_quercus, 0.01))
+      } else {
+        # Si Pinus sous-représenté, prob élevée
+        prob_accept <- min(1.0, (1 - prop_quercus_objetivo) / max(prop_actual_pinus, 0.01))
+      }
+      
+      # Roll dice
+      if (runif(1) < prob_accept) {
+        marcados <- bind_rows(marcados, arbol)
+        vol_acum <- vol_acum + arbol$volumen_m3
+        
+        if (arbol$genero_grupo == "Quercus") {
+          vol_quercus <- vol_quercus + arbol$volumen_m3
+        } else {
+          vol_pinus <- vol_pinus + arbol$volumen_m3
+        }
+      }
     }
     
-    vol_disponible <- ica_info$ica_total_pmf
-    vol_objetivo <- vol_disponible * (corte_config$intensidad_pct / 100)
+    # Résumé proportions finales
+    if (vol_acum > 0) {
+      prop_final_quercus <- vol_quercus / vol_acum
+      prop_final_pinus <- vol_pinus / vol_acum
+      
+      cat(sprintf("  Proporciones finales:\n"))
+      cat(sprintf("     Quercus: %.1f%% (objetivo: %.0f%%)\n",
+                  prop_final_quercus * 100,
+                  prop_quercus_objetivo * 100))
+      cat(sprintf("     Pinus:   %.1f%% (objetivo: %.0f%%)\n\n",
+                  prop_final_pinus * 100,
+                  (1 - prop_quercus_objetivo) * 100))
+    }
     
-    cat("\n[VOLUMEN OBJETIVO - MÉTODO ICA]\n")
-    cat("══════════════════════════════════════════════════════════\n")
-    cat(sprintf("  ICA anual: %.2f m³/año\n", ica_info$ica_anual))
-    cat(sprintf("  ICA total PMF (%d años): %.2f m³\n", 
-                config$periodo, ica_info$ica_total_pmf))
-    cat(sprintf("  Intensidad: %d%%\n", corte_config$intensidad_pct))
-    cat(sprintf("  ✓ Vol objetivo: %.2f m³ (FIJO)\n", vol_objetivo))
+  } else {
     
-    # Calcular distribución Liocourt como GUÍA (sin ajustar)
-    dist_obj <- calcular_distribucion_liocourt_guia(
-      arboles_vivos, 
-      q = corte_config$q_factor,
-      tolerancia = corte_config$tolerancia,
-      amplitud = 5
-    )
+    # Sélection simple sans contrôle proportions
+    vol_acum <- 0
+    marcados <- tibble()
     
-    return(list(
-      vol_objetivo = vol_objetivo,
-      vol_actual = vol_actual,
-      metodo_usado = "ICA",
-      dist_obj = dist_obj,
-      ica_info = ica_info
-    ))
-    
-  } else if (corte_config$metodo == "EXISTENCIAS") {
-    
-    vol_objetivo <- vol_actual * (corte_config$intensidad_pct / 100)
-    
-    cat("\n[VOLUMEN OBJETIVO - MÉTODO EXISTENCIAS]\n")
-    cat("══════════════════════════════════════════════════════════\n")
-    cat(sprintf("  Vol actual: %.2f m³\n", vol_actual))
-    cat(sprintf("  Intensidad: %d%%\n", corte_config$intensidad_pct))
-    cat(sprintf("  ✓ Vol objetivo: %.2f m³ (FIJO)\n", vol_objetivo))
-    
-    dist_obj <- calcular_distribucion_liocourt_guia(
-      arboles_vivos, 
-      q = corte_config$q_factor,
-      tolerancia = corte_config$tolerancia,
-      amplitud = 5
-    )
-    
-    return(list(
-      vol_objetivo = vol_objetivo,
-      vol_actual = vol_actual,
-      metodo_usado = "EXISTENCIAS",
-      dist_obj = dist_obj,
-      ica_info = ica_info
-    ))
+    for (i in 1:nrow(candidatos)) {
+      if (vol_acum >= vol_objetivo_inventario) break
+      
+      arbol <- candidatos[i, ]
+      marcados <- bind_rows(marcados, arbol)
+      vol_acum <- vol_acum + arbol$volumen_m3
+    }
   }
+  
+  vol_marcado_m3_ha <- vol_acum / area_muestreada_ha
+  
+  cat(sprintf("  ▶ Marcados: %d árboles, %.2f m³/ha\n", 
+              nrow(marcados), vol_marcado_m3_ha))
+  
+  # Resumen por clase
+  if (nrow(marcados) > 0) {
+    resumen_clase <- marcados %>%
+      group_by(clase_d) %>%
+      summarise(
+        n = n(),
+        distance_mean = mean(distance),
+        .groups = "drop"
+      ) %>%
+      arrange(clase_d)
+    
+    cat("\n  Distribución marcados:\n")
+    for (i in 1:nrow(resumen_clase)) {
+      cat(sprintf("    Clase %d cm: %d árboles (distance moy: %.1f)\n",
+                  resumen_clase$clase_d[i],
+                  resumen_clase$n[i],
+                  resumen_clase$distance_mean[i]))
+    }
+  }
+  cat("\n")
+  
+  list(
+    marcados = marcados,
+    vol_marcado_m3_ha = vol_marcado_m3_ha
+  )
 }
 
 # ==============================================================================
-# CALCULAR PLAN DE CORTAS
+# WORKFLOW PRINCIPAL
 # ==============================================================================
 
-calcular_plan_cortas <- function(arboles_df, 
+calcular_plan_cortas <- function(arboles_df,
                                  config = CONFIG,
                                  arboles_inicial = NULL,
-                                 arboles_año_anterior = NULL,
+                                 arboles_ano_anterior = NULL,
                                  corte_config = NULL,
-                                 año_actual = NULL) {
+                                 ano_actual = NULL) {
   
   if (is.null(corte_config)) {
-    corte_config <- configurar_corte(
-      metodo = "ICA",
-      intensidad_pct = 80,
-      q_factor = config$q_factor,
-      tolerancia_equilibrio = config$tolerancia
-    )
+    corte_config <- configurar_corte()
   }
   
-  cat(sprintf("\n╔═══════════════════════════════════════════════════════════╗\n"))
-  cat(sprintf("║  CORTE - %s", corte_config$metodo))
-  cat(sprintf("%*s║\n", 53 - nchar(corte_config$metodo), ""))
-  cat(sprintf("╚═══════════════════════════════════════════════════════════╝\n"))
   
+  cat("\n")
+  cat("╔═══════════════════════════════════════════════════════════╗\n")
+  cat("║  OPTIMIZADOR DE CORTAS                                    ║\n")
+  cat("╚═══════════════════════════════════════════════════════════╝\n")
+  
+  # Filtrar vivos
   vivos <- arboles_df %>% filtrar_arboles_vivos()
   
   if (nrow(vivos) < 10) {
-    cat("\n  ⚠️ Muy pocos árboles vivos\n")
+    cat("\n  ⚠️  Muy pocos árboles vivos\n")
     return(list(
-      arboles_marcados = tibble(), 
+      arboles_marcados = tibble(),
       resumen = tibble(),
-      vol_info = list(vol_objetivo = 0)
+      vol_info = list(vol_objetivo_m3_ha = 0)
     ))
   }
   
-  # Calcular volumen objetivo y distribución Liocourt
-  vol_info <- calcular_volumen_objetivo(
-    vivos, 
-    config, 
-    corte_config,
-    arboles_inicial,
-    arboles_año_anterior,
-    año_actual = año_actual
-  )
+  # Aplicar DMC
+  vivos <- vivos %>%
+    mutate(
+      dmc = case_when(
+        genero_grupo == "Pinus" ~ config$dmc$Pinus,
+        genero_grupo == "Quercus" ~ config$dmc$Quercus,
+        TRUE ~ 25
+      )
+    ) %>%
+    filter(diametro_normal >= dmc)
   
-  # Marcar árboles
-  marcados <- marcar_arboles(
-    vivos,
-    vol_info$vol_objetivo,
-    corte_config,
-    config,
-    vol_info$dist_obj
-  )
+  rodal_actual <- unique(vivos$rodal)[1]
   
-  # Resumen
-  if (nrow(marcados) > 0) {
-    vol_marcado <- sum(marcados$volumen_m3, na.rm = TRUE)
+  # STEP 1: Volumen objetivo
+  vol_info <- calcular_volumen_objetivo(vivos, config, corte_config)
+  vol_restante_m3_ha <- vol_info$vol_objetivo_m3_ha
+  
+  # STEP 2: Marcar maduros
+  resultado_maduros <- marcar_maduros(vivos, vol_restante_m3_ha, corte_config, config)
+  marcados_maduros <- resultado_maduros$marcados
+  vol_restante_m3_ha <- resultado_maduros$vol_restante_m3_ha
+  
+  # Árboles disponibles para Liocourt (excluir maduros ya marcados)
+  vivos_para_liocourt <- vivos %>%
+    filter(!arbol_id %in% marcados_maduros$arbol_id)
+  
+  # STEP 3: Distribución Liocourt
+    dist_liocourt <- calcular_distribucion_liocourt(
+      vivos_para_liocourt,
+     rodal_id = rodal_actual,  # ← AGREGAR ESTE PARÁMETRO
+     q = corte_config$q_factor,
+      tolerancia = corte_config$tolerancia
+   )
+  
+  # STEP 4: Marcar según Liocourt (distance à courbe)
+  resultado_liocourt <- marcar_liocourt_distance(
+    vivos_para_liocourt,
+    dist_liocourt,
+    vol_restante_m3_ha,
+    corte_config,
+    config
+  )
+  marcados_liocourt <- resultado_liocourt$marcados
+  
+  # Combinar todos los marcados
+  marcados_total <- bind_rows(marcados_maduros, marcados_liocourt)
+  
+  num_muestreos <- first(marcados_total$num_muestreos_realizados)
+  area_muestreada_ha <- num_muestreos * CONFIG$area_parcela_ha
+  
+  
+  # RESUMEN FINAL
+  if (nrow(marcados_total) > 0) {
+    superficie_ha <- vol_info$superficie_ha
+    vol_marcado_m3_ha <- sum(marcados_total$volumen_m3) / area_muestreada_ha
+    vol_marcado_total <- vol_marcado_m3_ha * superficie_ha
+    
+    cat("╔═══════════════════════════════════════════════════════════╗\n")
+    cat("║  RESUMEN FINAL                                            ║\n")
+    cat("╚═══════════════════════════════════════════════════════════╝\n")
+    cat(sprintf("  Árboles marcados:  %d\n", nrow(marcados_total)))
+    cat(sprintf("  Volumen marcado:   %.2f m³/ha (%.2f m³ total)\n",
+                vol_marcado_m3_ha, vol_marcado_total))
+    cat(sprintf("  Objetivo:          %.2f m³/ha (%.2f m³ total)\n",
+                vol_info$vol_objetivo_m3_ha, vol_info$vol_objetivo_total))
+    cat(sprintf("  Diferencia:        %.2f m³/ha (%.1f%%)\n\n",
+                vol_marcado_m3_ha - vol_info$vol_objetivo_m3_ha,
+                ((vol_marcado_m3_ha / vol_info$vol_objetivo_m3_ha) - 1) * 100))
+    
+    # Detalle por género
+    detalle_genero <- marcados_total %>%
+      group_by(genero_grupo) %>%
+      summarise(
+        n = n(),
+        vol = sum(volumen_m3),
+        .groups = "drop"
+      ) %>%
+      mutate(
+        n_ha = n / area_muestreada_ha,
+        vol_m3_ha = vol / area_muestreada_ha
+      )
+    
+    cat("  Por género:\n")
+    for (i in 1:nrow(detalle_genero)) {
+      cat(sprintf("    %s: %d árb (%.1f/ha), %.2f m³/ha\n",
+                  detalle_genero$genero_grupo[i],
+                  detalle_genero$n[i],
+                  detalle_genero$n_ha[i],
+                  detalle_genero$vol_m3_ha[i]))
+    }
+    cat("\n")
     
     resumen <- tibble(
-      metodo = corte_config$metodo,
-      n_arboles = nrow(marcados),
-      vol_total_m3 = vol_marcado,
-      vol_objetivo_m3 = vol_info$vol_objetivo,
-      vol_actual_m3 = vol_info$vol_actual,
-      pct_vol_actual = (vol_marcado / vol_info$vol_actual) * 100,
-      diferencia_m3 = vol_marcado - vol_info$vol_objetivo,
-      diferencia_pct = ((vol_marcado - vol_info$vol_objetivo) / vol_info$vol_objetivo) * 100
+      metodo = "ICA",
+      n_arboles = nrow(marcados_total),
+      vol_m3_ha = vol_marcado_m3_ha,
+      vol_total_m3 = vol_marcado_total,
+      vol_objetivo_m3_ha = vol_info$vol_objetivo_m3_ha,
+      diferencia_pct = ((vol_marcado_m3_ha / vol_info$vol_objetivo_m3_ha) - 1) * 100
     )
   } else {
     resumen <- tibble()
   }
   
-  return(list(
-    arboles_marcados = marcados,
+  list(
+    arboles_marcados = marcados_total,
     resumen = resumen,
-    vol_info = vol_info
-  ))
-}
-
-# ==============================================================================
-# MARCAR ÁRBOLES
-# ==============================================================================
-
-marcar_arboles <- function(arboles_vivos, 
-                           vol_objetivo,
-                           corte_config,
-                           config = CONFIG,
-                           dist_obj = NULL) {
-  
-  if (vol_objetivo <= 0) {
-    cat("\n  ⚠️ Vol objetivo = 0, no se marca ningún árbol\n")
-    return(tibble())
-  }
-  
-  if (is.null(dist_obj)) {
-    cat("\n  ⚠️ dist_obj es NULL, no se puede marcar\n")
-    return(tibble())
-  }
-  
-  cat("\n[MARCADO DE ÁRBOLES]\n")
-  cat("═══════════════════════════════════════════════════════════\n")
-  cat(sprintf("  Vol objetivo: %.2f m³\n", vol_objetivo))
-  cat(sprintf("  Estrategia: %s\n\n", corte_config$prioridad))
-  
-  # Verificar columnas
-  if (!"genero_grupo" %in% names(arboles_vivos)) {
-    stop("❌ ERROR: Columna 'genero_grupo' no existe")
-  }
-  
-  # ============================================================================
-  # 1. IDENTIFICAR CLASES PRIORITARIAS
-  # ============================================================================
-  
-  clases_prioritarias <- dist_obj %>%
-    filter(diagnostico == "Sobrepoblado", prioridad_corta > 0) %>%
-    arrange(desc(prioridad_corta)) %>%
-    select(clase_d, diferencia_pct, prioridad_corta, n_actual, vol_medio)
-  
-  if (nrow(clases_prioritarias) == 0) {
-    cat("  ℹ️ No hay clases sobrepobladas según Liocourt\n")
-    cat("  → Marcando de todas las clases >= DMC\n\n")
-    
-    # Si no hay sobrepoblación, usar todas las clases
-    clases_prioritarias <- arboles_vivos %>%
-      mutate(clase_d = floor(diametro_normal / 5) * 5) %>%
-      group_by(clase_d) %>%
-      summarise(
-        n_actual = n(),
-        vol_medio = mean(volumen_m3, na.rm = TRUE),
-        .groups = "drop"
-      ) %>%
-      mutate(
-        diferencia_pct = 0,
-        prioridad_corta = vol_medio * n_actual
-      ) %>%
-      arrange(desc(prioridad_corta))
-  }
-  
-  cat(sprintf("  Clases con prioridad: %d\n", nrow(clases_prioritarias)))
-  for (i in 1:min(3, nrow(clases_prioritarias))) {
-    clase <- clases_prioritarias[i, ]
-    cat(sprintf("    %d. Clase %d cm (%+.0f%%, n=%d)\n",
-                i, clase$clase_d, clase$diferencia_pct, clase$n_actual))
-  }
-  cat("\n")
-  
-  # ============================================================================
-  # 2. PREPARAR CANDIDATOS
-  # ============================================================================
-  
-  cat("  Preparando candidatos...\n")
-  
-  # Paso 1: Calcular clase diamétrica
-  candidatos <- arboles_vivos %>%
-    mutate(clase_d = floor(diametro_normal / 5) * 5)
-  
-  # Paso 2: Asignar DMC según género
-  candidatos <- candidatos %>%
-    mutate(
-      dmc_aplicable = case_when(
-        genero_grupo == "Pinus" ~ config$dmc$Pinus,
-        genero_grupo == "Quercus" ~ config$dmc$Quercus,
-        TRUE ~ 25
-      )
-    )
-  
-  # Paso 3: Sobrescribir con d_min si existe (manejar lista correctamente)
-  d_min_raw <- corte_config$d_min
-  
-  # Si d_min es una lista, extraer el primer elemento
-  if (is.list(d_min_raw)) {
-    d_min_raw <- d_min_raw[[1]]
-  }
-  
-  # Solo aplicar si no es NULL y no es NA
-  if (!is.null(d_min_raw) && !is.na(d_min_raw)) {
-    d_min_valor <- as.numeric(d_min_raw)
-    candidatos <- candidatos %>%
-      mutate(dmc_aplicable = d_min_valor)
-  }
-  
-  # Paso 4: Filtrar por diámetro mínimo
-  candidatos <- candidatos %>%
-    filter(diametro_normal >= dmc_aplicable)
-  
-  # Paso 5: Aplicar d_max si existe (manejar lista correctamente)
-  d_max_raw <- corte_config$d_max
-  
-  # Si d_max es una lista, extraer el primer elemento
-  if (is.list(d_max_raw)) {
-    d_max_raw <- d_max_raw[[1]]
-  }
-  
-  # Solo aplicar si no es NULL y no es NA
-  if (!is.null(d_max_raw) && !is.na(d_max_raw)) {
-    d_max_valor <- as.numeric(d_max_raw)
-    candidatos <- candidatos %>% 
-      filter(diametro_normal <= d_max_valor)
-  }
-  
-  # Paso 6: Excluir semilleros si configurado
-  if (!is.null(corte_config$excluir_semilleros) && corte_config$excluir_semilleros) {
-    n_antes <- nrow(candidatos)
-    candidatos <- candidatos %>%
-      mutate(
-        es_semillero = dominancia %in% c(1, 2, 3) & 
-          diametro_normal >= quantile(diametro_normal, 0.75, na.rm = TRUE)
-      ) %>%
-      filter(!es_semillero)
-    
-    n_excluidos <- n_antes - nrow(candidatos)
-    if (n_excluidos > 0) {
-      cat(sprintf("  Semilleros excluidos: %d árboles\n", n_excluidos))
-    }
-  }
-  
-  if (nrow(candidatos) == 0) {
-    cat("  ⚠️ No hay candidatos disponibles\n")
-    return(tibble())
-  }
-  
-  cat(sprintf("  Candidatos disponibles: %d árboles\n\n", nrow(candidatos)))
-  
-  # ============================================================================
-  # 3. UNIR CON PRIORIDADES Y ORDENAR
-  # ============================================================================
-  
-  candidatos <- candidatos %>%
-    left_join(
-      clases_prioritarias %>% select(clase_d, prioridad_corta),
-      by = "clase_d"
-    ) %>%
-    mutate(prioridad_corta = replace_na(prioridad_corta, 0))
-  
-  # Ordenar: prioridad Liocourt → dominancia → diámetro
-  if (corte_config$prioridad == "suprimidos") {
-    candidatos <- candidatos %>%
-      arrange(desc(prioridad_corta), desc(dominancia), diametro_normal)
-  } else if (corte_config$prioridad == "dominantes") {
-    candidatos <- candidatos %>%
-      arrange(desc(prioridad_corta), dominancia, desc(diametro_normal))
-  } else {
-    candidatos <- candidatos %>%
-      arrange(desc(prioridad_corta), runif(n()))
-  }
-  
-  # ============================================================================
-  # 4. SELECCIONAR HASTA ALCANZAR OBJETIVO
-  # ============================================================================
-  
-  vol_acum <- 0
-  seleccionados <- tibble()
-  
-  cat("[SELECCIÓN]\n")
-  cat("─────────────────────────────────────────────────────────\n")
-  
-  for (i in 1:nrow(candidatos)) {
-    arbol <- candidatos[i, ]
-    seleccionados <- bind_rows(seleccionados, arbol)
-    vol_acum <- vol_acum + arbol$volumen_m3
-    
-    if (i %% 10 == 0 || vol_acum >= vol_objetivo) {
-      cat(sprintf("  %3d árboles: %.2f m³ (%.1f%%)\n",
-                  i, vol_acum, (vol_acum/vol_objetivo)*100))
-    }
-    
-    if (vol_acum >= vol_objetivo) {
-      cat(sprintf("\n  ✓ Objetivo alcanzado\n"))
-      break
-    }
-  }
-  
-  # ============================================================================
-  # 4. SELECCIONAR HASTA ALCANZAR OBJETIVO
-  # ============================================================================
-  
-  vol_acum <- 0
-  seleccionados <- tibble()
-  
-  cat("[SELECCIÓN]\n")
-  cat("─────────────────────────────────────────────────────────\n")
-  
-  for (i in 1:nrow(candidatos)) {
-    arbol <- candidatos[i, ]
-    seleccionados <- bind_rows(seleccionados, arbol)
-    vol_acum <- vol_acum + arbol$volumen_m3
-    
-    if (i %% 10 == 0 || vol_acum >= vol_objetivo) {
-      cat(sprintf("  %3d árboles: %.2f m³ (%.1f%%)\n",
-                  i, vol_acum, (vol_acum/vol_objetivo)*100))
-    }
-    
-    if (vol_acum >= vol_objetivo) {
-      cat(sprintf("\n  ✓ Objetivo alcanzado\n"))
-      break
-    }
-  }
-  # ============================================================================
-  # 4. SELECCIONAR HASTA ALCANZAR OBJETIVO
-  # ============================================================================
-  
-  vol_acum <- 0
-  seleccionados <- tibble()
-  
-  cat("[SELECCIÓN]\n")
-  cat("─────────────────────────────────────────────────────────\n")
-  
-  for (i in 1:nrow(candidatos)) {
-    arbol <- candidatos[i, ]
-    seleccionados <- bind_rows(seleccionados, arbol)
-    vol_acum <- vol_acum + arbol$volumen_m3
-    
-    if (i %% 10 == 0 || vol_acum >= vol_objetivo) {
-      cat(sprintf("  %3d árboles: %.2f m³ (%.1f%%)\n",
-                  i, vol_acum, (vol_acum/vol_objetivo)*100))
-    }
-    
-    if (vol_acum >= vol_objetivo) {
-      cat(sprintf("\n  ✓ Objetivo alcanzado\n"))
-      break
-    }
-  }
-  
-  # ============================================================================
-  # 5. RESUMEN
-  # ============================================================================
-  
-  cat("\n[RESUMEN]\n")
-  cat("─────────────────────────────────────────────────────────\n")
-  
-  resumen <- seleccionados %>%
-    group_by(clase_d) %>%
-    summarise(
-      n = n(),
-      vol = sum(volumen_m3, na.rm = TRUE),
-      .groups = "drop"
-    ) %>%
-    arrange(desc(vol))
-  
-  for (i in 1:nrow(resumen)) {
-    cat(sprintf("  Clase %2d cm: %2d árboles, %.2f m³\n",
-                resumen$clase_d[i], resumen$n[i], resumen$vol[i]))
-  }
-  
-  cat("─────────────────────────────────────────────────────────\n")
-  cat(sprintf("  TOTAL: %d árboles, %.2f m³ (%.1f%%)\n",
-              nrow(seleccionados), vol_acum, (vol_acum/vol_objetivo)*100))
-  cat("═══════════════════════════════════════════════════════════\n\n")
-  
-  return(seleccionados)
+    vol_info = vol_info,
+    dist_liocourt = dist_liocourt
+  )
 }
 
 # ==============================================================================
 # APLICAR CORTAS
 # ==============================================================================
 
-aplicar_cortas <- function(arboles_df, plan_cortas, año_corta) {
+aplicar_cortas <- function(arboles_df, plan_cortas, ano_corta) {
   
   if (nrow(plan_cortas$arboles_marcados) == 0) {
     return(arboles_df)
@@ -615,7 +661,7 @@ aplicar_cortas <- function(arboles_df, plan_cortas, año_corta) {
     mutate(
       fue_cortado = arbol_id %in% ids_marcados,
       dominancia = if_else(fue_cortado, 8, dominancia),
-      año_corta = if_else(fue_cortado, año_corta, NA_real_)
+      ano_corta = if_else(fue_cortado, ano_corta, NA_real_)
     )
 }
 
@@ -623,12 +669,18 @@ aplicar_cortas <- function(arboles_df, plan_cortas, año_corta) {
 # MENSAJE DE CARGA
 # ==============================================================================
 
-cat("\n✓ Optimizador de cortas (ICA-LIOCOURT v5 FINAL)\n")
+cat("\n✓ Optimizador de cortas (DISTANCE À COURBE LIOCOURT)\n")
 cat("═══════════════════════════════════════════════════════════\n")
-cat("  MÉTODO CORRECTO:\n")
-cat("    1. ICA define CUÁNTO cortar (vol_objetivo FIJO)\n")
-cat("    2. Liocourt identifica clases sobrepobladas\n")
-cat("    3. Marcar árboles hasta alcanzar vol_objetivo\n\n")
-cat("  SIN método iterativo (era ilógico)\n")
-cat("  SIN ajuste de N_ref\n")
-cat("  Liocourt solo da prioridades por clase\n\n")
+cat("  PHILOSOPHIE:\n")
+cat("    1. ICA fixe le volume (sustainability)\n")
+cat("    2. Maduros d'abord (si non protégés)\n")
+cat("    3. Distance à courbe: arbres les plus excédentaires\n\n")
+cat("  LOGIQUE DISTANCE:\n")
+cat("    • Position = rang aléatoire dans classe (neutre)\n")
+cat("    • Distance = position - n_liocourt\n")
+cat("    • Distance > 0 → AU-DESSUS courbe (excédent)\n")
+cat("    • Sélection par distance décroissante\n\n")
+cat("  CONTRÔLE PROPORTIONS:\n")
+cat("    • Si proporcion_quercus définie: roll dice\n")
+cat("    • Auto-régulation vers proportions cibles\n")
+cat("    • Garde priorité distance Liocourt\n\n")
