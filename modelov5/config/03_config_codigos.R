@@ -105,11 +105,11 @@ CODIGOS_TRATAMIENTO_COMP <- tibble(
 CODIGOS_DOMINANCIA <- tribble(
   ~codigo, ~etiqueta,                  ~factor_crecimiento, ~factor_mortalidad,
   1,       "Dominante",                1.00,                1.0,
-  2,       "Codominante",              1.00,                1.0,
-  3,       "Intermedio",               0.70,                1.5,
+  2,       "Intermedio",              0.8,                1.0,
+  3,       "Suprimido",               0.6,                1.2,
   4,       "Libre sin supresión",      1.00,                1.0,
-  5,       "Libre con supresión",      0.70,                1.5,
-  6,       "Suprimido",                0.40,                3.0,
+  5,       "Libre con supresión",      0.70,                1.2,
+  6,       "Aislado con piso alto",    0.50,                1.5,
   7,       "Muerto en pie",            0.00,                NA,
   8,       "Muerto caído",             0.00,                NA,
   9,       "Tocón",                    0.00,                NA

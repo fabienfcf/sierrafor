@@ -417,7 +417,7 @@ importar_inventario_completo <- function(ruta_archivo, ruta_umm = NULL) {
 }
 
 # ==============================================================================
-# CONSTRUIR DATAFRAME DE ÁRBOLES PARA SIMULACIÓN
+# CONSTRUIR DATAFRAME DE ÁRBOLES PARA SIMULACIÓN - CON SUPERFICIE_CORTA
 # ==============================================================================
 
 construir_arboles_analisis <- function(inventario, config = CONFIG) {
@@ -466,12 +466,10 @@ construir_arboles_analisis <- function(inventario, config = CONFIG) {
   # Agregar info de especies usando ESPECIES de CONFIG
   arboles <- arboles %>%
     left_join(
-      ESPECIES,  # ← Usa ESPECIES de 01_config_especies.R
+      ESPECIES,
       by = c("especie" = "codigo")
     ) %>%
-    # Crear columna genero_grupo para compatibilidad
     mutate(genero_grupo = genero) %>%
-    # Crear ID único
     mutate(
       arbol_id = paste0(
         "R", sprintf("%02d", rodal),
@@ -487,15 +485,15 @@ construir_arboles_analisis <- function(inventario, config = CONFIG) {
     source(file.path(PROYECTO_ROOT, "core/15_core_calculos.R"))
   }
   
-  # Calcular área basal usando core_calculos
+  # Calcular área basal
   arboles <- arboles %>%
     mutate(area_basal = calcular_area_basal(diametro_normal))
   
-  # Agregar parámetros de ecuaciones alométricas usando ECUACIONES_VOLUMEN
+  # Agregar parámetros de ecuaciones alométricas
   arboles <- arboles %>%
     left_join(ECUACIONES_VOLUMEN, by = "nombre_cientifico")
   
-  # Calcular volúmenes usando core_calculos
+  # Calcular volúmenes
   cat("  → Calculando volúmenes con ecuaciones alométricas...\n")
   arboles <- calcular_volumenes_vectorizado(arboles)
   
@@ -505,20 +503,56 @@ construir_arboles_analisis <- function(inventario, config = CONFIG) {
   
   cat("[5/5] Agregando información de rodales...\n")
   
-  # Agregar info de rodales si existe
+  # ============================================================================
+  # ✅ CAMBIO CRÍTICO: Agregar SUPERFICIE_CORTA además de SUPERFICIE total
+  # ============================================================================
+  
   if (!is.null(inventario$umm)) {
+    
+    # Verificar que SUPERFICIE_CORTA existe
+    if (!"SUPERFICIE_CORTA" %in% names(inventario$umm)) {
+      warning("⚠️ Columna SUPERFICIE_CORTA no encontrada en UMM_stats.csv")
+      warning("   Usando SUPERFICIE total como superficie aprovechable")
+      
+      inventario$umm <- inventario$umm %>%
+        mutate(SUPERFICIE_CORTA = SUPERFICIE)
+    }
+    
     arboles <- arboles %>%
       left_join(
         inventario$umm %>%
-          select(id, num_puntos, SUPERFICIE, PEND_mean, SUP_cor_PEND) %>%
+          select(
+            id, 
+            num_puntos, 
+            SUPERFICIE,           # Superficie TOTAL del rodal
+            SUPERFICIE_CORTA,     # ✅ Superficie APROVECHABLE (ribereña)
+            PEND_mean, 
+            SUP_cor_PEND
+          ) %>%
           rename(
             rodal = id,
-            superficie_ha = SUPERFICIE,
+            superficie_total_ha = SUPERFICIE,         # ✅ Total
+            superficie_corta_ha = SUPERFICIE_CORTA,   # ✅ Aprovechable
             pendiente_media = `PEND_mean`,
             num_muestreos_realizados = num_puntos
           ),
         by = "rodal"
       )
+    
+    # Crear superficie_ha (mantener compatibilidad con código existente)
+    # Por defecto = superficie_total_ha
+    arboles <- arboles %>%
+      mutate(
+        superficie_ha = superficie_total_ha  # Para análisis descriptivos
+      )
+    
+    cat(sprintf("  ✓ Superficie total agregada: %.2f ha\n", 
+                sum(unique(arboles$superficie_total_ha), na.rm = TRUE)))
+    cat(sprintf("  ✅ Superficie aprovechable agregada: %.2f ha\n", 
+                sum(unique(arboles$superficie_corta_ha), na.rm = TRUE)))
+    
+  } else {
+    warning("⚠️ No hay datos de UMM (superficie)")
   }
   
   # Estadísticas finales

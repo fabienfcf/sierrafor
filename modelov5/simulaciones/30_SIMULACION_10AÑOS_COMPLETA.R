@@ -1,8 +1,8 @@
 # ==============================================================================
-# SIMULACIÓN 10 AÑOS - CORREGIDA
+# SIMULACIÓN 10 ANOS - CORREGIDA
 # ==============================================================================
 
-# Al inicio de 30_SIMULACION_10AÑOS_COMPLETA.R
+# Al inicio de 30_SIMULACION_10ANOS_COMPLETA.R
 if (!exists("PROYECTO_ROOT")) {
   PROYECTO_ROOT <- "/home/fabien/Documents/CONAFOR/Consultoria/Las Alazanas/PMF - 2026 - 2036/Inventario Forestal 102025/R5/modelov5"
 }
@@ -45,7 +45,7 @@ cat(sprintf("  Población inicial: %d árboles\n", nrow(arboles_inicial)))
 # SIMULACIÓN
 # ==============================================================================
 
-cat("\n[3/6] Simulando 10 años...\n\n")
+cat("\n[3/6] Simulando 10 anos...\n\n")
 
 arboles_actual <- arboles_inicial
 historial_completo <- list()
@@ -53,64 +53,66 @@ historial_metricas <- list()
 registro_cortas <- list()
 
 # Estado inicial
-historial_completo[[1]] <- arboles_actual %>% mutate(año_simulacion = 0)
+historial_completo[[1]] <- arboles_actual %>% mutate(ano_simulacion = 0)
 historial_metricas[[1]] <- calcular_metricas_estado(arboles_actual, CONFIG) %>%
-  mutate(año_simulacion = 0)
+  mutate(ano_simulacion = 0)
 
-# Simulación año por año
-for (año in 1:PERIODO_SIMULACION) {
+# ==============================================================================
+# SIMULATION LOOP - ADAPTÉE POUR NOUVELLE LOGIQUE
+# ==============================================================================
+
+# Simulación ano por ano
+for (ano in 1:PERIODO_SIMULACION) {
   
-  cat(sprintf("═══ AÑO %d ═══\n", año))
+  cat(sprintf("═══ ANO %d ═══\n", ano))
   
   # 1. CRECIMIENTO
-  cat(sprintf("\n[AÑO %d] Crecimiento...\n", año))
-  arboles_actual <- aplicar_crecimiento_poblacion(arboles_actual, CONFIG, año)
+  cat(sprintf("\n[ANO %d] Crecimiento...\n", ano))
+  arboles_actual <- aplicar_crecimiento_poblacion(arboles_actual, CONFIG, ano)
   
   # 2. MORTALIDAD
-  cat(sprintf("\n[AÑO %d] Mortalidad...\n", año))
-  arboles_actual <- aplicar_mortalidad_poblacion(arboles_actual, CONFIG, año)
+  cat(sprintf("\n[ANO %d] Mortalidad...\n", ano))
+  arboles_actual <- aplicar_mortalidad_poblacion(arboles_actual, CONFIG, ano)
   
   # 3. RECLUTAMIENTO
-  cat(sprintf("\n[AÑO %d] Reclutamiento...\n", año))
-  arboles_actual <- aplicar_reclutamiento(arboles_actual, CONFIG, año)
+  cat(sprintf("\n[ANO %d] Reclutamiento...\n", ano))
+  arboles_actual <- aplicar_reclutamiento(arboles_actual, CONFIG, ano)
   
   # 4. CORTAS
   rodales_cortar <- PROGRAMA_CORTAS %>%
-    filter(año_corta == año) %>%
+    filter(ano_corta == ano) %>%
     pull(rodal)
   
   if (length(rodales_cortar) > 0) {
     
-    cat(sprintf("\n[AÑO %d] 🪓 CORTAS PROGRAMADAS\n", año))
+    cat(sprintf("\n[ANO %d] 🪓 CORTAS PROGRAMADAS\n", ano))
     cat(sprintf("  Rodales: %s\n\n", paste(rodales_cortar, collapse = ", ")))
     
     for (rodal_id in rodales_cortar) {
       
-      # ✅ Obtener configuración completa del rodal
+      # ✅ CAMBIO 1: Obtener configuración completa del rodal
       config_rodal <- PROGRAMA_CORTAS %>% 
-        filter(rodal == rodal_id, año_corta == año) %>%
+        filter(rodal == rodal_id, ano_corta == ano) %>%
         slice(1)  # Por si hay duplicados
       
-      # ✅ Crear configuración de corte con TODOS los parámetros
+      # ✅ CAMBIO 2: Crear configuración con NUEVOS parámetros
       corte_config <- configurar_corte(
         metodo = config_rodal$metodo,
         intensidad_pct = config_rodal$intensidad_pct,
-        años_ica = PERIODO_SIMULACION,
-        d_min = config_rodal$d_min,
-        d_max = config_rodal$d_max,
-        prioridad = config_rodal$prioridad,
-        excluir_semilleros = config_rodal$excluir_semilleros  # ✅ AHORA EXISTE
+        proteger_maduros_pinus = config_rodal$proteger_maduros_pinus,      # NUEVO
+        proteger_maduros_quercus = config_rodal$proteger_maduros_quercus,  # NUEVO
+        proporcion_quercus = config_rodal$proporcion_quercus,     
+        q_factor = Q_FACTOR,
+        tolerancia = TOLERANCIA_EQUILIBRIO
       )
       
       # Filtrar árboles del rodal
       arboles_rodal <- arboles_actual %>% filter(rodal == rodal_id)
       arboles_rodal_inicial <- arboles_inicial %>% filter(rodal == rodal_id)
       
-      arboles_rodal_año_anterior <- NULL
-      if (año > 1 && length(historial_completo) >= año) {
-        arboles_rodal_año_anterior <- historial_completo[[año]] %>%
-          filter(rodal == rodal_id)
-      }
+      # ✅ CAMBIO 3: Árbol año anterior (simplificado, ya no necesario para ICA)
+      # El ICA viene del CSV, no se calcula dinámicamente
+      arboles_rodal_ano_anterior <- NULL
       
       cat(sprintf("  ──── Rodal %d ────\n", rodal_id))
       
@@ -120,9 +122,9 @@ for (año in 1:PERIODO_SIMULACION) {
           arboles_rodal,
           CONFIG,
           arboles_rodal_inicial,
-          arboles_rodal_año_anterior,
+          arboles_rodal_ano_anterior,
           corte_config,
-          año_actual = año
+          ano_actual = ano
         )
       }, error = function(e) {
         cat(sprintf("  ❌ Error: %s\n", e$message))
@@ -135,8 +137,8 @@ for (año in 1:PERIODO_SIMULACION) {
         # Asegurarse que las columnas existen
         arboles_cortados <- plan_cortas$arboles_marcados %>%
           mutate(
-            año_corta = año,
-            rodal_cortado = rodal_id,  # ✅ Ahora sí existe
+            ano_corta = ano,
+            rodal_cortado = rodal_id,
             metodo_corta = config_rodal$metodo
           )
         
@@ -151,16 +153,16 @@ for (año in 1:PERIODO_SIMULACION) {
       }
       
       # Aplicar corta
-      arboles_actual <- aplicar_cortas(arboles_actual, plan_cortas, año_corta = año)
+      arboles_actual <- aplicar_cortas(arboles_actual, plan_cortas, ano_corta = ano)
       
       cat("\n")
     }
   }
   
   # 5. GUARDAR ESTADO
-  historial_completo[[año + 1]] <- arboles_actual %>% mutate(año_simulacion = año)
-  historial_metricas[[año + 1]] <- calcular_metricas_estado(arboles_actual, CONFIG) %>%
-    mutate(año_simulacion = año)
+  historial_completo[[ano + 1]] <- arboles_actual %>% mutate(ano_simulacion = ano)
+  historial_metricas[[ano + 1]] <- calcular_metricas_estado(arboles_actual, CONFIG) %>%
+    mutate(ano_simulacion = ano)
 }
 
 # Consolidar
@@ -187,50 +189,103 @@ cat("\n✓ Simulación completada\n")
 # ==============================================================================
 # GRÁFICOS
 # ==============================================================================
-
 cat("\n[4/6] Generando gráficos...\n")
 
+# ==============================================================================
+# MÉTRICAS POR GÉNERO DESDE ARBOLES INDIVIDUALES
+# ==============================================================================
+
+# Calcular métricas detalladas por género desde df_historial
+metricas_por_genero <- df_historial %>%
+  filter(!dominancia %in% c(7, 8, 9)) %>%
+  group_by(rodal, ano_simulacion, genero_grupo) %>%
+  summarise(
+    n_arboles = n(),
+    dg_cm = sqrt(mean(diametro_normal^2, na.rm = TRUE)),
+    d_sd_cm = sd(diametro_normal, na.rm = TRUE),
+    h_media_m = mean(altura_total, na.rm = TRUE),
+    vol_total_m3 = sum(volumen_m3, na.rm = TRUE),
+    # ✅ Usar columna existente (es la misma para todos los árboles de la UMM)
+    num_sitios_total = first(num_muestreos_realizados),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    area_muestreada_ha = num_sitios_total * CONFIG$area_parcela_ha,
+    vol_ha_m3 = vol_total_m3 / area_muestreada_ha,
+    densidad_ha = n_arboles / area_muestreada_ha
+  )
+
+# Pivotar para tener columnas por género
+metricas_pivotadas <- metricas_por_genero %>%
+  pivot_wider(
+    id_cols = c(rodal, ano_simulacion),
+    names_from = genero_grupo,
+    values_from = c(densidad_ha, n_arboles, dg_cm, d_sd_cm, h_media_m, vol_ha_m3),
+    names_glue = "{genero_grupo}_{.value}"
+  ) %>%
+  rename_with(
+    ~str_replace(., "Pinus_", "pinus_") %>% 
+      str_replace(., "Quercus_", "quercus_"),
+    starts_with(c("Pinus_", "Quercus_"))
+  )
+
+# Combinar con métricas agregadas (volumen, densidad total)
 evolucion_rodal <- df_metricas %>%
-  group_by(rodal, año_simulacion) %>%
+  group_by(rodal, ano_simulacion) %>%
   summarise(
     vol_ha = sum(vol_ha_m3, na.rm = TRUE),
     densidad_ha = sum(densidad_ha, na.rm = TRUE),
     .groups = "drop"
-  )
+  ) %>%
+  left_join(metricas_pivotadas, by = c("rodal", "ano_simulacion"))
 
-p_volumen <- ggplot(evolucion_rodal, aes(x = año_simulacion, y = vol_ha, 
+# Mostrar primeras filas
+cat("\n✓ Métricas por género calculadas\n")
+cat("\nColumnas disponibles:\n")
+print(names(evolucion_rodal))
+
+cat("\nPrimeras filas (ejemplo):\n")
+evolucion_rodal %>% 
+  filter(ano_simulacion %in% c(0, 5, 10)) %>%
+  select(rodal, ano_simulacion, vol_ha, 
+         pinus_vol_ha_m3, quercus_vol_ha_m3,  # ← NUEVAS COLUMNAS
+         pinus_dg_cm, quercus_dg_cm) %>%
+  head(6) %>%
+  print()
+
+p_volumen <- ggplot(evolucion_rodal, aes(x = ano_simulacion, y = vol_ha, 
                                          color = factor(rodal), 
                                          group = rodal)) +
   geom_line(linewidth = 1) +
   geom_point(size = 2) +
   geom_vline(data = PROGRAMA_CORTAS, 
-             aes(xintercept = año_corta), 
+             aes(xintercept = ano_corta), 
              linetype = "dashed", alpha = 0.3) +
   labs(
-    title = "Evolución del volumen por rodal (10 años)",
-    subtitle = "Líneas verticales = años de corta",
-    x = "Año", y = "Volumen (m³/ha)", color = "Rodal"
+    title = "Evolución del volumen por rodal (10 anos)",
+    subtitle = "Líneas verticales = anos de corta",
+    x = "Ano", y = "Volumen (m³/ha)", color = "Rodal"
   ) +
   theme_minimal() +
   theme(legend.position = "bottom")
 
-p_densidad <- ggplot(evolucion_rodal, aes(x = año_simulacion, y = densidad_ha, 
+p_densidad <- ggplot(evolucion_rodal, aes(x = ano_simulacion, y = densidad_ha, 
                                           color = factor(rodal), 
                                           group = rodal)) +
   geom_line(linewidth = 1) +
   geom_point(size = 2) +
   geom_vline(data = PROGRAMA_CORTAS, 
-             aes(xintercept = año_corta), 
+             aes(xintercept = ano_corta), 
              linetype = "dashed", alpha = 0.3) +
   labs(
     title = "Evolución de la densidad por rodal",
-    x = "Año", y = "Densidad (árboles/ha)", color = "Rodal"
+    x = "Ano", y = "Densidad (árboles/ha)", color = "Rodal"
   ) +
   theme_minimal() +
   theme(legend.position = "bottom")
 
 p_combined <- p_volumen / p_densidad
-ggsave("graficos/evolucion_10años_rodales.png", p_combined, 
+ggsave("graficos/evolucion_10anos_rodales.png", p_combined, 
        width = 12, height = 10, dpi = 300)
 
 cat("  ✓ Gráfico guardado\n")
@@ -242,34 +297,11 @@ cat("  ✓ Gráfico guardado\n")
 cat("\n[5/6] Calculando intensidad de corte...\n")
 
 if (nrow(df_cortas) > 0) {
-  
-  intensidad_corte <- df_cortas %>%
-    mutate(
-      clase_d = asignar_clase_diametrica(diametro_normal, formato = "rango")
-    ) %>%
-    group_by(rodal_cortado, año_corta, genero_grupo, clase_d) %>%
-    summarise(
-      n_arboles = n(),
-      vol_cortado_m3 = sum(volumen_m3, na.rm = TRUE),
-      .groups = "drop"
-    )
-  
-  resumen_corte_rodal <- df_cortas %>%
-    group_by(rodal_cortado, año_corta, genero_grupo) %>%
-    summarise(
-      n_arboles = n(),
-      vol_cortado_m3 = sum(volumen_m3, na.rm = TRUE),
-      d_medio = mean(diametro_normal, na.rm = TRUE),
-      .groups = "drop"
-    )
-  
   cat(sprintf("  Árboles cortados: %d\n", nrow(df_cortas)))
   cat(sprintf("  Volumen cortado: %.2f m³\n", 
               sum(df_cortas$volumen_m3, na.rm = TRUE)))
 } else {
   cat("  ℹ️ No se registraron cortas\n")
-  intensidad_corte <- tibble()
-  resumen_corte_rodal <- tibble()
 }
 
 # ==============================================================================
@@ -286,6 +318,7 @@ tabla_inicial <- arboles_inicial %>%
     n_arboles = n(),
     Vol_m3 = sum(volumen_m3, na.rm = TRUE),
     D_medio_cm = mean(diametro_normal, na.rm = TRUE),
+    Dg_cm = sqrt(sum(diametro_normal^2) / n()),  # ← AHORA
     .groups = "drop"
   )
 
@@ -302,14 +335,206 @@ print(xtable_inicial,
 cat("  ✓ Tablas exportadas\n")
 
 # ==============================================================================
+# EXPORTAR TABLAS DE CORTAS - CON COLUMNAS POR HA Y TOTAL UMM
+# ==============================================================================
+
+if (nrow(df_cortas) > 0) {
+  
+  cat("\n[EXPORTACION ADICIONAL] Tablas de cortas...\n")
+  
+  # ============================================================================
+  # CSV 1: Resumen por rodal y genero - CON COLUMNAS POR HA Y TOTAL
+  # ============================================================================
+  
+  resumen_corte_rodal <- df_cortas %>%
+    group_by(rodal_cortado, ano_corta, genero_grupo) %>%
+    summarise(
+      n_arboles = n(),
+      vol_cortado_m3 = sum(volumen_m3, na.rm = TRUE),
+      dg_cm = sqrt(sum(diametro_normal^2) / n()),  # ← AHORA
+      h_media_m = mean(altura_total, na.rm = TRUE),
+      superficie_corta_ha = first(superficie_corta_ha),
+      num_muestreos = first(num_muestreos_realizados),
+      .groups = "drop"
+    ) %>%
+    mutate(
+      area_muestreada_ha = num_muestreos * CONFIG$area_parcela_ha,
+      n_arboles_por_ha = n_arboles / area_muestreada_ha,
+      n_arboles_umm = n_arboles_por_ha * superficie_corta_ha,
+      vol_m3_ha = vol_cortado_m3 / area_muestreada_ha,
+      vol_total_umm_m3 = vol_m3_ha * superficie_corta_ha
+    )
+  
+  write_csv(resumen_corte_rodal, "resultados/cortas_resumen_rodal_genero.csv")
+  cat("  OK cortas_resumen_rodal_genero.csv\n")
+  
+  # ============================================================================
+  # CSV 2: Distribucion diametrica - CON COLUMNAS POR HA Y TOTAL
+  # ============================================================================
+  
+  intensidad_corte <- df_cortas %>%
+    mutate(
+      clase_d = asignar_clase_diametrica(diametro_normal, formato = "rango")
+    ) %>%
+    group_by(rodal_cortado, ano_corta, genero_grupo, clase_d) %>%
+    summarise(
+      n_arboles = n(),
+      vol_cortado_m3 = sum(volumen_m3, na.rm = TRUE),
+      superficie_corta_ha = first(superficie_corta_ha),
+      num_muestreos = first(num_muestreos_realizados),
+      .groups = "drop"
+    ) %>%
+    mutate(
+      area_muestreada_ha = num_muestreos * CONFIG$area_parcela_ha,
+      n_arboles_por_ha = n_arboles / area_muestreada_ha,
+      n_arboles_umm = n_arboles_por_ha * superficie_corta_ha,
+      vol_m3_ha = vol_cortado_m3 / area_muestreada_ha,
+      vol_total_umm_m3 = vol_m3_ha * superficie_corta_ha
+    )
+  
+  write_csv(intensidad_corte, "resultados/cortas_distribucion_diametrica.csv")
+  cat("  OK cortas_distribucion_diametrica.csv\n")
+  
+  # ============================================================================
+  # CSV 3: Detalle completo arbol por arbol
+  # ============================================================================
+  
+  df_cortas_export <- df_cortas %>%
+    select(
+      arbol_id, rodal_cortado, ano_corta, genero_grupo, 
+      diametro_normal, altura_total, volumen_m3, 
+      dominancia, metodo_corta
+    ) %>%
+    mutate(
+      clase_d = asignar_clase_diametrica(diametro_normal, formato = "rango")
+    )
+  
+  write_csv(df_cortas_export, "resultados/cortas_detalle_completo.csv")
+  cat("  OK cortas_detalle_completo.csv\n")
+  
+  # ============================================================================
+  # LaTeX 1: Resumen por rodal (SIN pivot_wider)
+  # ============================================================================
+  
+  # En lugar de pivot_wider, mantener formato largo
+  tabla_resumen <- resumen_corte_rodal %>%
+    arrange(rodal_cortado, ano_corta, genero_grupo) %>%
+    select(rodal_cortado, ano_corta, genero_grupo, 
+           n_arboles, vol_cortado_m3, dg_cm)
+  
+  xtable_resumen <- xtable(
+    tabla_resumen,
+    caption = "Resumen de cortas por rodal y género",
+    label = "tab:cortas_resumen",
+    digits = c(0, 0, 0, 0, 0, 2, 2)  # 7 elementos para 6 columnas + rownames
+  )
+  
+  print(xtable_resumen,
+        file = "tablas_latex/03_intensidad_corte_rodal.tex",
+        include.rownames = FALSE,
+        floating = TRUE,
+        booktabs = TRUE,
+        sanitize.text.function = function(x) x)
+  
+  cat("  ✓ 03_intensidad_corte_rodal.tex\n")
+  
+  # ============================================================================
+  # LaTeX 2: Distribución diamétrica por género
+  # ============================================================================
+  
+  tabla_clase <- intensidad_corte %>%
+    group_by(genero_grupo, clase_d) %>%
+    summarise(
+      n_total = sum(n_arboles),
+      vol_total_m3 = sum(vol_cortado_m3),
+      .groups = "drop"
+    ) %>%
+    arrange(genero_grupo, clase_d)
+  
+  xtable_clase <- xtable(
+    tabla_clase,
+    caption = "Distribución de cortas por género y clase diamétrica",
+    label = "tab:cortas_clase_diametrica",
+    digits = c(0, 0, 0, 0, 2)  # 5 elementos para 4 columnas
+  )
+  
+  print(xtable_clase,
+        file = "tablas_latex/04_corte_por_clase_diametrica.tex",
+        include.rownames = FALSE,
+        floating = TRUE,
+        booktabs = TRUE,
+        sanitize.text.function = function(x) x)
+  
+  cat("  ✓ 04_corte_por_clase_diametrica.tex\n")
+  
+  # ============================================================================
+  # LaTeX 3: Tablas individuales por rodal
+  # ============================================================================
+  
+  for (rodal_id in sort(unique(df_cortas$rodal_cortado))) {
+    
+    cortas_rodal <- intensidad_corte %>%
+      filter(rodal_cortado == rodal_id) %>%
+      select(ano_corta, genero_grupo, clase_d, n_arboles, vol_cortado_m3) %>%
+      arrange(ano_corta, genero_grupo, clase_d)
+    
+    if (nrow(cortas_rodal) > 0) {
+      
+      # Calcular dinámicamente el número de columnas
+      n_cols <- ncol(cortas_rodal)
+      
+      xtable_rodal <- xtable(
+        cortas_rodal,
+        caption = sprintf("Programa de cortas - Rodal %d", rodal_id),
+        label = sprintf("tab:corta_rodal_%02d", rodal_id),
+        digits = c(0, rep(0, n_cols - 1), 2)  # Última columna con 2 decimales
+      )
+      
+      print(xtable_rodal,
+            file = sprintf("tablas_latex/05_corta_rodal_%02d.tex", rodal_id),
+            include.rownames = FALSE,
+            floating = TRUE,
+            booktabs = TRUE,
+            sanitize.text.function = function(x) x)
+      
+      cat(sprintf("  ✓ 05_corta_rodal_%02d.tex\n", rodal_id))
+    }
+  }
+  
+  # ============================================================================
+  # BONUS: Resumen consolidado total
+  # ============================================================================
+  
+  resumen_total <- df_cortas %>%
+    group_by(genero_grupo) %>%
+    summarise(
+      n_arboles_total = n(),
+      vol_total_m3 = sum(volumen_m3, na.rm = TRUE),
+      dg_cm = sqrt(sum(diametro_normal^2) / n()),  # ← AHORA
+      .groups = "drop"
+    )
+  
+  write_csv(resumen_total, "resultados/cortas_resumen_total.csv")
+  cat("  ✓ cortas_resumen_total.csv\n")
+  
+  cat("\n✓ Exportación de tablas de cortas completada\n\n")
+  
+  # Mostrar resumen en consola
+  cat("RESUMEN DE CORTAS:\n")
+  cat("═══════════════════════════════════════════════════════════\n")
+  print(resumen_total)
+  cat("\n")
+}
+
+# ==============================================================================
 # GUARDAR RESULTADOS
 # ==============================================================================
 
-saveRDS(df_historial, "resultados/historial_completo_10años.rds")
-saveRDS(df_metricas, "resultados/metricas_10años.rds")
+saveRDS(df_historial, "resultados/historial_completo_10anos.rds")
+saveRDS(df_metricas, "resultados/metricas_10anos.rds")
 saveRDS(df_cortas, "resultados/registro_cortas.rds")
 
-write_csv(evolucion_rodal, "resultados/evolucion_rodal_10años.csv")
+write_csv(evolucion_rodal, "resultados/evolucion_rodal_10anos.csv")
 
 # ==============================================================================
 # RESUMEN FINAL
@@ -321,7 +546,7 @@ cat("║         ✓ SIMULACIÓN COMPLETADA                          ║\n")
 cat("╚═══════════════════════════════════════════════════════════╝\n\n")
 
 cat("RESULTADOS:\n")
-cat(sprintf("  • Años simulados:     10\n"))
+cat(sprintf("  • Anos simulados:     10\n"))
 cat(sprintf("  • Rodales:            %d\n", n_distinct(arboles_inicial$rodal)))
 
 if (nrow(df_cortas) > 0) {

@@ -27,161 +27,358 @@ formatear_3_significativas <- function(df) {
 }
 
 # ==============================================================================
-# TABLA 5: EXISTENCIAS REALES Y VOLUMEN DE APROVECHAMIENTO
+# TABLA 5 COMPLETA: EXISTENCIAS POR UNIDAD MÍNIMA DE MANEJO
+# Incluye: Existencias Reales, Intensidad de Corta, Residuales y Posibilidad
+# ==============================================================================
+# 
+# Esta función genera la Tabla 5 completa según NOM-152-SEMARNAT-2023
+# integrando resultados del cálculo ICA
+#
 # ==============================================================================
 
-tabla_5_existencias_aprovechamiento <- function(arboles_df, config = CONFIG, 
-                                                vol_aprovechamiento = NULL) {
+generar_tabla_5_completa_con_ica <- function(arboles_df, 
+                                             ica_por_rodal, 
+                                             ica_por_genero_rodal,
+                                             config = CONFIG) {
   
-  cat("\n[TABLA 5] Existencias reales y volumen de aprovechamiento...\n")
+  cat("\n╔════════════════════════════════════════════════════════════╗\n")
+  cat("║  TABLA 5: Existencias por Unidad Mínima de Manejo        ║\n")
+  cat("╚════════════════════════════════════════════════════════════╝\n\n")
   
-  # Filtrar vivos
+  # ==========================================================================
+  # PASO 1: CALCULAR EXISTENCIAS REALES POR ESPECIE Y RODAL
+  # ==========================================================================
+  
+  cat("[1/6] Calculando Existencias Reales por especie...\n")
+  
   vivos <- arboles_df %>% filter(!dominancia %in% c(7, 8, 9))
   
-  # Calcular métricas por rodal y especie principal (Pinus/Quercus)
-  por_rodal_especie <- vivos %>%
+  # Por especie (Pinus y Quercus)
+  por_especie <- vivos %>%
     filter(genero_grupo %in% c("Pinus", "Quercus")) %>%
-    group_by(rodal, genero = genero_grupo) %>%
+    group_by(rodal, especie = genero_grupo) %>%
     summarise(
-      n_arboles = n(),
+      n_muestreos = first(num_muestreos_realizados),
+      superficie_ha = first(superficie_corta_ha),  # ✅ Superficie aprovechable
       vol_muestreado_m3 = sum(volumen_m3, na.rm = TRUE),
       ab_muestreada_m2 = sum(area_basal, na.rm = TRUE),
-      d_medio = mean(diametro_normal, na.rm = TRUE),
-      n_muestreos = first(num_muestreos_realizados),
-      superficie_ha = first(superficie_ha),
       .groups = "drop"
     ) %>%
     mutate(
       area_total_ha = config$area_parcela_ha * n_muestreos,
-      
       # Expandir a hectárea
-      vol_ha_m3 = expandir_a_hectarea(vol_muestreado_m3, area_total_ha),
-      ab_ha_m2 = expandir_a_hectarea(ab_muestreada_m2, area_total_ha),
-      densidad_ha = expandir_a_hectarea(n_arboles, area_total_ha),
-      
-      # Volumen total por rodal
-      vol_total_rodal_m3 = vol_ha_m3 * superficie_ha,
-      
-      # Calcular DMC (Diámetro Medio Cuadrático)
-      dmc_cm = sqrt((ab_ha_m2 * 10000) / (pi/4) / densidad_ha)
+      vol_ha_m3 = vol_muestreado_m3 / area_total_ha,
+      ab_ha_m2 = ab_muestreada_m2 / area_total_ha,
+      # Volumen total por rodal (usando superficie aprovechable)
+      vol_umm_m3 = vol_ha_m3 * superficie_ha
     )
   
-  # Crear datos separados para Quercus y Pinus
-  quercus_data <- por_rodal_especie %>%
-    filter(genero == "Quercus") %>%
-    select(rodal,
-           N_quercus = n_arboles,
-           D_medio_quercus = d_medio,
-           AB_quercus = ab_ha_m2,
-           Vol_ha_quercus = vol_ha_m3,
-           Vol_rodal_quercus = vol_total_rodal_m3)
+  # Separar Quercus y Pinus
+  quercus <- por_especie %>%
+    filter(especie == "Quercus") %>%
+    select(rodal, 
+           ER_Quercus_ha = vol_ha_m3,
+           ER_Quercus_umm = vol_umm_m3,
+           AB_Quercus_ha = ab_ha_m2)
   
-  pinus_data <- por_rodal_especie %>%
-    filter(genero == "Pinus") %>%
-    select(rodal,
-           N_pinus = n_arboles,
-           D_medio_pinus = d_medio,
-           AB_pinus = ab_ha_m2,
-           Vol_ha_pinus = vol_ha_m3,
-           Vol_rodal_pinus = vol_total_rodal_m3)
+  pinus <- por_especie %>%
+    filter(especie == "Pinus") %>%
+    select(rodal, 
+           ER_Pinus_ha = vol_ha_m3,
+           ER_Pinus_umm = vol_umm_m3,
+           AB_Pinus_ha = ab_ha_m2)
   
-  # Resumen por rodal (total)
+  # Total por rodal
   por_rodal_total <- vivos %>%
     group_by(rodal) %>%
     summarise(
-      n_arboles_total = n(),
+      n_muestreos = first(num_muestreos_realizados),
+      superficie_ha = first(superficie_corta_ha),
       vol_muestreado_m3 = sum(volumen_m3, na.rm = TRUE),
       ab_muestreada_m2 = sum(area_basal, na.rm = TRUE),
-      n_muestreos = first(num_muestreos_realizados),
-      superficie_ha = first(superficie_ha),
       .groups = "drop"
     ) %>%
     mutate(
       area_total_ha = config$area_parcela_ha * n_muestreos,
-      vol_ha_m3 = expandir_a_hectarea(vol_muestreado_m3, area_total_ha),
-      ab_ha_m2 = expandir_a_hectarea(ab_muestreada_m2, area_total_ha),
-      densidad_ha = expandir_a_hectarea(n_arboles_total, area_total_ha),
-      vol_total_rodal_m3 = vol_ha_m3 * superficie_ha,
-      dmc_cm = sqrt((ab_ha_m2 * 10000) / (pi/4) / densidad_ha)
+      ER_total_ha = vol_muestreado_m3 / area_total_ha,
+      ER_total_umm = ER_total_ha * superficie_ha,
+      AB_total_ha = ab_muestreada_m2 / area_total_ha
     )
   
-  # Unir todo en el orden solicitado
+  # ==========================================================================
+  # PASO 2: EXTRAER INTENSIDAD DE CORTA DEL ICA
+  # ==========================================================================
+  
+  cat("[2/6] Extrayendo Intensidad de Corta del ICA...\n")
+  
+  # Intensidad de corta por rodal (promedio ponderado por volumen)
+  intensidad_corta <- ica_por_genero_rodal %>%
+    group_by(rodal) %>%
+    summarise(
+      # Intensidad de corta promedio ponderada por ER
+      IntCor_rel_IC = weighted.mean(IntCor_rel_IC, ER_rodal_m3, na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    mutate(
+      IntCor_pct = IntCor_rel_IC * 100  # Convertir a porcentaje
+    )
+  
+  # ==========================================================================
+  # PASO 3: CALCULAR POSIBILIDAD (VOLUMEN DE CORTA)
+  # ==========================================================================
+  
+  cat("[3/6] Calculando Posibilidad (volumen de corta)...\n")
+  
+  # Posibilidad por especie
+  posibilidad_especie <- ica_por_genero_rodal %>%
+    select(rodal, genero, 
+           VC_ha_m3, 
+           VC_rodal_m3 = VC_rodal_m3) %>%
+    pivot_wider(
+      names_from = genero,
+      values_from = c(VC_ha_m3, VC_rodal_m3),
+      names_glue = "{.value}_{genero}"
+    )
+  
+  # Posibilidad total por rodal
+  posibilidad_total <- ica_por_rodal %>%
+    select(rodal, 
+           VC_total_ha = VC_ha_m3,
+           VC_total_umm = VC_rodal_m3)
+  
+  # ==========================================================================
+  # PASO 4: CALCULAR RESIDUALES (ER - VC)
+  # ==========================================================================
+  
+  cat("[4/6] Calculando volúmenes residuales...\n")
+  
+  # Residuales por especie (necesitamos hacer join con ER)
+  residuales_quercus <- quercus %>%
+    left_join(
+      posibilidad_especie %>% select(rodal, VC_ha_m3_Quercus),
+      by = "rodal"
+    ) %>%
+    mutate(
+      Residual_Quercus_ha = ER_Quercus_ha - coalesce(VC_ha_m3_Quercus, 0),
+      AB_Residual_Quercus = AB_Quercus_ha * (Residual_Quercus_ha / ER_Quercus_ha)
+    ) %>%
+    select(rodal, Residual_Quercus_ha, AB_Residual_Quercus)
+  
+  residuales_pinus <- pinus %>%
+    left_join(
+      posibilidad_especie %>% select(rodal, VC_ha_m3_Pinus),
+      by = "rodal"
+    ) %>%
+    mutate(
+      Residual_Pinus_ha = ER_Pinus_ha - coalesce(VC_ha_m3_Pinus, 0),
+      AB_Residual_Pinus = AB_Pinus_ha * (Residual_Pinus_ha / ER_Pinus_ha)
+    ) %>%
+    select(rodal, Residual_Pinus_ha, AB_Residual_Pinus)
+  
+  # Residuales totales
+  residuales_total <- por_rodal_total %>%
+    left_join(posibilidad_total, by = "rodal") %>%
+    mutate(
+      Residual_total_ha = ER_total_ha - VC_total_ha,
+      AB_Residual_total = AB_total_ha * (Residual_total_ha / ER_total_ha)
+    ) %>%
+    select(rodal, Residual_total_ha, AB_Residual_total)
+  
+  # ==========================================================================
+  # PASO 5: ENSAMBLAR TABLA COMPLETA
+  # ==========================================================================
+  
+  cat("[5/6] Ensamblando tabla final...\n")
+  
   tabla_5 <- por_rodal_total %>%
-    left_join(quercus_data, by = "rodal") %>%
-    left_join(pinus_data, by = "rodal") %>%
-    mutate(UMM = as.character(rodal)) %>%
+    select(rodal, superficie_ha) %>%
+    # Existencias Reales - Quercus
+    left_join(quercus, by = "rodal") %>%
+    # Existencias Reales - Pinus
+    left_join(pinus, by = "rodal") %>%
+    # Existencias Reales - Total
+    left_join(
+      por_rodal_total %>% select(rodal, ER_total_ha, ER_total_umm, AB_total_ha),
+      by = "rodal"
+    ) %>%
+    # Intensidad de Corta
+    left_join(intensidad_corta, by = "rodal") %>%
+    # Residuales - Quercus
+    left_join(residuales_quercus, by = "rodal") %>%
+    # Residuales - Pinus
+    left_join(residuales_pinus, by = "rodal") %>%
+    # Residuales - Total
+    left_join(residuales_total, by = "rodal") %>%
+    # Posibilidad
+    left_join(posibilidad_especie, by = "rodal") %>%
+    left_join(posibilidad_total, by = "rodal") %>%
+    # Renombrar columnas según formato NOM-152
     select(
-      UMM,
+      No. = rodal,
       `Superficie (ha)` = superficie_ha,
-      # Quercus
-      `N Quercus` = N_quercus,
-      `D Medio Quercus (cm)` = D_medio_quercus,
-      `AB Quercus (m²/ha)` = AB_quercus,
-      `ER Quercus (m³/ha)` = Vol_ha_quercus,
-      `ER Quercus (m³)` = Vol_rodal_quercus,
       
-      # Pinus
-      `N Pinus` = N_pinus,
-      `D Medio Pinus (cm)` = D_medio_pinus,
-      `AB Pinus (m²/ha)` = AB_pinus,
-      `ER Pinus (m³/ha)` = Vol_ha_pinus,
-      `ER Pinus (m³)` = Vol_rodal_pinus,
+      # EXISTENCIAS REALES - Quercus
+      `ER Quercus m³/ha` = ER_Quercus_ha,
+      `ER Quercus m³ UMM` = ER_Quercus_umm,
+      `AB Quercus m²/ha` = AB_Quercus_ha,
       
-      # Volúmenes por rodal
-      `ER Rodal (m³)` = vol_total_rodal_m3
+      # EXISTENCIAS REALES - Pinus
+      `ER Pinus m³/ha` = ER_Pinus_ha,
+      `ER Pinus m³ UMM` = ER_Pinus_umm,
+      `AB Pinus m²/ha` = AB_Pinus_ha,
+      
+      # EXISTENCIAS REALES - Total
+      `ER Total m³/ha` = ER_total_ha,
+      `ER Total m³ UMM` = ER_total_umm,
+      `AB Total m²/ha` = AB_total_ha,
+      
+      # INTENSIDAD DE CORTA
+      `Intensidad Corta (%) UMM` = IntCor_pct,
+      
+      # RESIDUALES - Quercus
+      `Residual Quercus m³/ha` = Residual_Quercus_ha,
+      `AB Residual Quercus m²/ha` = AB_Residual_Quercus,
+      
+      # RESIDUALES - Pinus
+      `Residual Pinus m³/ha` = Residual_Pinus_ha,
+      `AB Residual Pinus m²/ha` = AB_Residual_Pinus,
+      
+      # RESIDUALES - Total
+      `Residual Total m³/ha` = Residual_total_ha,
+      `AB Residual Total m²/ha` = AB_Residual_total,
+      
+      # POSIBILIDAD - Quercus
+      `Posibilidad Quercus m³/ha` = VC_ha_m3_Quercus,
+      `Posibilidad Quercus m³ UMM` = VC_rodal_m3_Quercus,
+      
+      # POSIBILIDAD - Pinus
+      `Posibilidad Pinus m³/ha` = VC_ha_m3_Pinus,
+      `Posibilidad Pinus m³ UMM` = VC_rodal_m3_Pinus,
+      
+      # POSIBILIDAD - Total
+      `Posibilidad Total m³/ha` = VC_total_ha,
+      `Posibilidad Total m³ UMM` = VC_total_umm
     )
   
-  # Reemplazar NA por 0 en columnas numéricas
+  # Reemplazar NA por 0
   tabla_5 <- tabla_5 %>%
     mutate(across(where(is.numeric), ~ replace_na(., 0)))
   
-  # Si hay volumen de aprovechamiento, agregarlo
-  if (!is.null(vol_aprovechamiento)) {
-    tabla_5 <- tabla_5 %>%
-      left_join(
-        vol_aprovechamiento %>%
-          select(UMM = rodal, `Vol Aprovechamiento (m³)` = vol_aprovechado),
-        by = "UMM"
-      ) %>%
-      mutate(
-        `Vol Residual (m³/ha)` = `ER Total (m³/ha)` - 
-          (`Vol Aprovechamiento (m³)` / `Superficie (ha)`)
-      )
-  }
+  # ==========================================================================
+  # PASO 6: AGREGAR SUBTOTALES Y TOTAL
+  # ==========================================================================
   
-  # Agregar totales (antes del formateo para mantener precisión en cálculos)
-  totales <- tabla_5 %>%
+  cat("[6/6] Agregando subtotales...\n")
+  
+  # Calcular subtotales
+  subtotal <- tabla_5 %>%
     summarise(
-      UMM = "TOTAL",
+      `No.` = "Subtotal",
       `Superficie (ha)` = sum(`Superficie (ha)`, na.rm = TRUE),
-      `N Quercus` = sum(`N Quercus`, na.rm = TRUE),
-      `D Medio Quercus (cm)` = mean(`D Medio Quercus (cm)`, na.rm = TRUE),
-      `AB Quercus (m²/ha)` = mean(`AB Quercus (m²/ha)`, na.rm = TRUE),
-      `ER Quercus (m³/ha)` = mean(`ER Quercus (m³/ha)`, na.rm = TRUE),
-      `ER Quercus (m³)` = sum(`ER Quercus (m³)`, na.rm = TRUE),
-      `N Pinus` = sum(`N Pinus`, na.rm = TRUE),
-      `D Medio Pinus (cm)` = mean(`D Medio Pinus (cm)`, na.rm = TRUE),
-      `AB Pinus (m²/ha)` = mean(`AB Pinus (m²/ha)`, na.rm = TRUE),
-      `ER Pinus (m³/ha)` = mean(`ER Pinus (m³/ha)`, na.rm = TRUE),
-      `ER Pinus (m³)` = sum(`ER Pinus (m³)`, na.rm = TRUE),
-      `ER Rodal (m³)` = sum(`ER Rodal (m³)`, na.rm = TRUE)
+      across(starts_with("ER") & ends_with("m³ UMM"), ~ sum(., na.rm = TRUE)),
+      across(starts_with("ER") & ends_with("m³/ha"), ~ weighted.mean(., `Superficie (ha)`, na.rm = TRUE)),
+      across(starts_with("AB") & !contains("Residual"), ~ weighted.mean(., `Superficie (ha)`, na.rm = TRUE)),
+      `Intensidad Corta (%) UMM` = weighted.mean(`Intensidad Corta (%) UMM`, `Superficie (ha)`, na.rm = TRUE),
+      across(starts_with("Residual") & ends_with("m³/ha"), ~ weighted.mean(., `Superficie (ha)`, na.rm = TRUE)),
+      across(starts_with("AB Residual"), ~ weighted.mean(., `Superficie (ha)`, na.rm = TRUE)),
+      across(starts_with("Posibilidad") & ends_with("m³ UMM"), ~ sum(., na.rm = TRUE)),
+      across(starts_with("Posibilidad") & ends_with("m³/ha"), ~ weighted.mean(., `Superficie (ha)`, na.rm = TRUE))
     )
   
-  if ("Vol Aprovechamiento (m³)" %in% names(tabla_5)) {
-    totales <- totales %>%
-      mutate(
-        `Vol Aprovechamiento (m³)` = sum(tabla_5$`Vol Aprovechamiento (m³)`, na.rm = TRUE),
-        `Vol Residual (m³/ha)` = mean(tabla_5$`Vol Residual (m³/ha)`, na.rm = TRUE)
-      )
-  }
+  total <- subtotal %>%
+    mutate(`No.` = "Total")
   
-  tabla_5 <- bind_rows(tabla_5, totales)
+  # Ensamblar tabla final
+  tabla_5_final <- bind_rows(tabla_5, subtotal, total)
   
-  # APLICAR FORMATEO FINAL - convertir números a character con 3 cifras significativas
-  tabla_5_formateada <- formatear_3_significativas(tabla_5)
+  cat("\n✓ Tabla 5 generada exitosamente\n")
+  cat(sprintf("  Rodales: %d\n", nrow(tabla_5)))
+  cat(sprintf("  Columnas: %d\n", ncol(tabla_5_final)))
   
-  return(tabla_5_formateada)
+  return(tabla_5_final)
 }
+
+# ==============================================================================
+# FUNCIÓN PARA EXPORTAR TABLA 5 A LaTeX
+# ==============================================================================
+
+exportar_tabla_5_latex <- function(tabla_5, archivo = "tablas_latex/tabla_5_existencias_umm.tex") {
+  
+  cat("\n[EXPORTANDO] Tabla 5 a LaTeX...\n")
+  
+  # Crear directorio si no existe
+  dir.create(dirname(archivo), showWarnings = FALSE, recursive = TRUE)
+  
+  # Formatear números a 3 cifras significativas
+  tabla_5_latex <- tabla_5 %>%
+    mutate(across(where(is.numeric), ~ formatC(., format = "f", digits = 2)))
+  
+  # Crear tabla xtable
+  xt <- xtable::xtable(
+    tabla_5_latex,
+    caption = "Existencias por unidad mínima de manejo (Tabla 5 - Sección 11.1.4)",
+    label = "tab:existencias_umm",
+    align = c("l", "c", rep("r", ncol(tabla_5_latex) - 1))
+  )
+  
+  # Exportar
+  print(xt,
+        file = archivo,
+        include.rownames = FALSE,
+        caption.placement = "top",
+        booktabs = TRUE,
+        sanitize.text.function = identity,
+        scalebox = 0.7,  # Escalar tabla para que quepa en página
+        table.placement = "H")
+  
+  cat(sprintf("  ✓ Exportado a: %s\n\n", archivo))
+}
+
+# ==============================================================================
+# WORKFLOW COMPLETO
+# ==============================================================================
+
+generar_tabla_5_workflow <- function(arboles_analisis, config = CONFIG) {
+  
+  cat("\n╔════════════════════════════════════════════════════════════╗\n")
+  cat("║       WORKFLOW: GENERAR TABLA 5 COMPLETA                  ║\n")
+  cat("╚════════════════════════════════════════════════════════════╝\n\n")
+  
+  # 1. Calcular ICA
+  cat("[1/3] Calculando ICA (10 años sin cortes)...\n")
+  resultado_ica <- calcular_ica_sin_cortes(arboles_analisis, años = 10, config = config)
+  
+  # 2. Generar Tabla 5
+  cat("\n[2/3] Generando Tabla 5 completa...\n")
+  tabla_5 <- generar_tabla_5_completa_con_ica(
+    arboles_analisis,
+    resultado_ica$ica_por_rodal,
+    resultado_ica$ica_por_genero_rodal,
+    config
+  )
+  
+  # 3. Exportar
+  cat("\n[3/3] Exportando tabla...\n")
+  
+  # CSV
+  write.csv(tabla_5, "resultados/tabla_5_existencias_umm.csv", row.names = FALSE)
+  cat("  ✓ CSV: resultados/tabla_5_existencias_umm.csv\n")
+  
+  # LaTeX
+  exportar_tabla_5_latex(tabla_5, "tablas_latex/tabla_5_existencias_umm.tex")
+  
+  # También guardar el objeto ICA completo
+  saveRDS(resultado_ica, "resultados/resultado_ica_completo.rds")
+  cat("  ✓ RDS: resultados/resultado_ica_completo.rds\n")
+  
+  cat("\n✓ Workflow completado\n\n")
+  
+  return(list(
+    tabla_5 = tabla_5,
+    ica = resultado_ica
+  ))
+}
+
 
 # ==============================================================================
 # TABLA 6: EXISTENCIAS POR CATEGORÍA DIAMÉTRICA POR UMM

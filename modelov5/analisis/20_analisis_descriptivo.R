@@ -638,9 +638,582 @@ analizar_distribucion_diametrica <- function(arboles_df, config = CONFIG,
 }
 
 # ==============================================================================
-# 3. EROSIÃ“N - % SITIOS AFECTADOS + CSV
+# ANÁLISIS DASOMÉTRICO CON IC 95% BASADO EN COEFICIENTE DE VARIACIÓN
+# ==============================================================================
+# 
+# MÉTODO:
+# 1. Calcular CV a nivel predio (n=58) para cada género
+# 2. Aplicar CV a valores puntuales por UMM/género/especie
+# 3. IC = media × (1 ± margen_error_relativo)
+# 
+# FÓRMULA:
+# - CV = s / x̄
+# - EE = (CV × x̄) / √n
+# - E = t(α/2, df) × EE
+# - IC = [x̄ × (1 - E/x̄), x̄ × (1 + E/x̄)]
+# - IC = x̄ × [1 ± (CV × t / √n)]
+#
+# Para n=58, t(0.025, 57) ≈ 2.002
+# Margen relativo = CV × 2.002 / √58 ≈ CV × 0.263
 # ==============================================================================
 
+# ==============================================================================
+# FUNCIÓN AUXILIAR: FORMATEAR 3 CIFRAS SIGNIFICATIVAS
+# ==============================================================================
+
+formatear_3_cifras_sig <- function(x) {
+  if (is.na(x) || !is.numeric(x)) return(NA_character_)
+  if (x == 0) return("0")
+  
+  formatted <- signif(x, 3)
+  
+  if (abs(formatted) >= 100) {
+    sprintf("%.0f", formatted)
+  } else if (abs(formatted) >= 10) {
+    sprintf("%.1f", formatted)
+  } else if (abs(formatted) >= 1) {
+    sprintf("%.2f", formatted)
+  } else {
+    sprintf("%.3f", formatted)
+  }
+}
+
+formatear_3_cifras_sig <- Vectorize(formatear_3_cifras_sig)
+
+# ==============================================================================
+# FUNCIÓN: CALCULAR CV A NIVEL PREDIO
+# ==============================================================================
+
+calcular_cv_predio <- function(arboles_df, config) {
+  
+  cat("\n[PASO 1] Calculando CV a nivel predio (n=58)...\n")
+  
+  # Todos los sitios
+  todos_sitios <- arboles_df %>%
+    distinct(muestreo, rodal)
+  
+  n_sitios <- n_distinct(todos_sitios$muestreo)
+  
+  # Árboles vivos por sitio y género
+  vivos <- arboles_df %>%
+    filter(!dominancia %in% c(7, 8, 9)) %>%
+    filter(genero_grupo %in% c("Pinus", "Quercus"))
+  
+  metricas_por_sitio <- vivos %>%
+    group_by(muestreo, genero_grupo) %>%
+    summarise(
+      n_arboles = n(),
+      ab_m2 = sum(area_basal, na.rm = TRUE),
+      vol_m3 = sum(volumen_m3, na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    mutate(
+      densidad_ha = n_arboles / config$area_parcela_ha,
+      ab_m2ha = ab_m2 / config$area_parcela_ha,
+      vol_m3ha = vol_m3 / config$area_parcela_ha
+    )
+  
+  # Completar con ceros donde no hay presencia
+  grid_completo <- expand.grid(
+    muestreo = unique(todos_sitios$muestreo),
+    genero_grupo = c("Pinus", "Quercus"),
+    stringsAsFactors = FALSE
+  ) %>%
+    left_join(metricas_por_sitio, by = c("muestreo", "genero_grupo")) %>%
+    mutate(
+      densidad_ha = ifelse(is.na(densidad_ha), 0, densidad_ha),
+      ab_m2ha = ifelse(is.na(ab_m2ha), 0, ab_m2ha),
+      vol_m3ha = ifelse(is.na(vol_m3ha), 0, vol_m3ha)
+    )
+  
+  # Calcular CV por género
+  cv_por_genero <- grid_completo %>%
+    group_by(genero_grupo) %>%
+    summarise(
+      n = n(),
+      # Densidad
+      dens_media = mean(densidad_ha, na.rm = TRUE),
+      dens_sd = sd(densidad_ha, na.rm = TRUE),
+      dens_cv = dens_sd / dens_media,
+      # AB
+      ab_media = mean(ab_m2ha, na.rm = TRUE),
+      ab_sd = sd(ab_m2ha, na.rm = TRUE),
+      ab_cv = ab_sd / ab_media,
+      # Volumen
+      vol_media = mean(vol_m3ha, na.rm = TRUE),
+      vol_sd = sd(vol_m3ha, na.rm = TRUE),
+      vol_cv = vol_sd / vol_media,
+      .groups = "drop"
+    )
+  
+  cat(sprintf("  ✓ CV calculados (n=%d sitios):\n", n_sitios))
+  cat(sprintf("    Pinus: Dens CV=%.3f, AB CV=%.3f, Vol CV=%.3f\n",
+              cv_por_genero$dens_cv[cv_por_genero$genero_grupo == "Pinus"],
+              cv_por_genero$ab_cv[cv_por_genero$genero_grupo == "Pinus"],
+              cv_por_genero$vol_cv[cv_por_genero$genero_grupo == "Pinus"]))
+  cat(sprintf("    Quercus: Dens CV=%.3f, AB CV=%.3f, Vol CV=%.3f\n",
+              cv_por_genero$dens_cv[cv_por_genero$genero_grupo == "Quercus"],
+              cv_por_genero$ab_cv[cv_por_genero$genero_grupo == "Quercus"],
+              cv_por_genero$vol_cv[cv_por_genero$genero_grupo == "Quercus"]))
+  
+  return(list(
+    cv_por_genero = cv_por_genero,
+    n_sitios = n_sitios
+  ))
+}
+
+# ==============================================================================
+# FUNCIÓN: CALCULAR IC USANDO CV
+# ==============================================================================
+
+calcular_ic_con_cv <- function(media, cv, n, alpha = 0.05) {
+  
+  # Para valores muy cercanos a 0, no calcular IC
+  if (is.na(media) || media < 0.01) {
+    return(list(
+      media = media,
+      ic_inf = NA_real_,
+      ic_sup = NA_real_,
+      margen_rel = NA_real_
+    ))
+  }
+  
+  # Valor t para n-1 grados de libertad
+  df <- n - 1
+  t_critico <- qt(1 - alpha/2, df)
+  
+  # Margen de error relativo
+  # E/x̄ = CV × t / √n
+  margen_rel <- cv * t_critico / sqrt(n)
+  
+  # IC
+  ic_inf <- max(0, media * (1 - margen_rel))
+  ic_sup <- media * (1 + margen_rel)
+  
+  return(list(
+    media = media,
+    ic_inf = ic_inf,
+    ic_sup = ic_sup,
+    margen_rel = margen_rel
+  ))
+}
+
+# ==============================================================================
+# FUNCIÓN PRINCIPAL: ANÁLISIS DASOMÉTRICO CON IC BASADO EN CV
+# ==============================================================================
+
+analizar_dasometrico_cv <- function(arboles_df, 
+                                    config = CONFIG,
+                                    exportar_csv_flag = TRUE,
+                                    exportar_latex = TRUE) {
+  
+  cat("\n╔════════════════════════════════════════════════════════════╗\n")
+  cat("║   ANÁLISIS DASOMÉTRICO CON IC BASADO EN CV (n=58)        ║\n")
+  cat("╚════════════════════════════════════════════════════════════╝\n")
+  
+  if (!exists("filtrar_arboles_vivos")) {
+    source("core/15_core_calculos.R")
+  }
+  
+  # ==========================================================================
+  # PASO 1: CALCULAR CV A NIVEL PREDIO
+  # ==========================================================================
+  
+  cv_data <- calcular_cv_predio(arboles_df, config)
+  cv_por_genero <- cv_data$cv_por_genero
+  n_sitios_predio <- cv_data$n_sitios
+  
+  # ==========================================================================
+  # PASO 2: CALCULAR VALORES PUNTUALES POR ESPECIE Y GÉNERO
+  # ==========================================================================
+  
+  cat("\n[PASO 2] Calculando valores por especie, género y UMM...\n")
+  
+  vivos <- arboles_df %>%
+    filter(!dominancia %in% c(7, 8, 9)) %>%
+    filter(genero_grupo %in% c("Pinus", "Quercus")) %>%
+    mutate(rodal = as.character(rodal))
+  
+  # CRÍTICO: Calcular n_sitios TOTALES por rodal PRIMERO
+  sitios_por_rodal_count <- vivos %>%
+    group_by(rodal) %>%
+    summarise(n_sitios_umm = n_distinct(muestreo), .groups = "drop")
+  
+  # Superficie por rodal
+  superficie_por_rodal <- arboles_df %>%
+    group_by(rodal) %>%
+    summarise(superficie_ha = first(superficie_ha), .groups = "drop") %>%
+    mutate(rodal = as.character(rodal))
+  
+  # Métricas por UMM y ESPECIE
+  metricas_umm_especie <- vivos %>%
+    group_by(rodal, genero_grupo, nombre_cientifico) %>%
+    summarise(
+      n_arboles = n(),
+      vol_total_m3 = sum(volumen_m3, na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    # UNIR con n_sitios TOTALES del rodal
+    left_join(sitios_por_rodal_count, by = "rodal") %>%
+    mutate(
+      area_total_ha = n_sitios_umm * config$area_parcela_ha,
+      vol_m3ha = vol_total_m3 / area_total_ha,
+      tipo_fila = "especie"
+    ) %>%
+    rename(n_sitios = n_sitios_umm)
+  
+  # Métricas por UMM y GÉNERO (para subtotales)
+  metricas_umm_genero <- vivos %>%
+    group_by(rodal, genero_grupo) %>%
+    summarise(
+      n_arboles = n(),
+      vol_total_m3 = sum(volumen_m3, na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    # UNIR con n_sitios TOTALES del rodal
+    left_join(sitios_por_rodal_count, by = "rodal") %>%
+    mutate(
+      area_total_ha = n_sitios_umm * config$area_parcela_ha,
+      vol_m3ha = vol_total_m3 / area_total_ha
+    ) %>%
+    rename(n_sitios = n_sitios_umm)
+  
+  # ==========================================================================
+  # PASO 3: APLICAR CV PARA CALCULAR IC (solo para ER)
+  # ==========================================================================
+  
+  cat("[PASO 3] Aplicando CV para calcular IC en ER...\n")
+  
+  # ESPECIES: Aplicar IC usando CV del género correspondiente
+  tabla_especies_con_ic <- metricas_umm_especie %>%
+    left_join(
+      cv_por_genero %>% select(genero_grupo, vol_cv),
+      by = "genero_grupo"
+    ) %>%
+    rowwise() %>%
+    mutate(
+      vol_ic = list(calcular_ic_con_cv(vol_m3ha, vol_cv, n_sitios_predio)),
+      vol_ic_inf = vol_ic$ic_inf,
+      vol_ic_sup = vol_ic$ic_sup
+    ) %>%
+    ungroup() %>%
+    select(rodal, genero_grupo, nombre_cientifico, n_sitios, vol_m3ha, 
+           vol_ic_inf, vol_ic_sup, tipo_fila)
+  
+  # SUBTOTALES POR GÉNERO: Aplicar IC
+  subtotales_genero <- metricas_umm_genero %>%
+    left_join(
+      cv_por_genero %>% select(genero_grupo, vol_cv),
+      by = "genero_grupo"
+    ) %>%
+    rowwise() %>%
+    mutate(
+      vol_ic = list(calcular_ic_con_cv(vol_m3ha, vol_cv, n_sitios_predio)),
+      vol_ic_inf = vol_ic$ic_inf,
+      vol_ic_sup = vol_ic$ic_sup
+    ) %>%
+    ungroup() %>%
+    mutate(
+      nombre_cientifico = paste("Subtotal", genero_grupo),
+      tipo_fila = "subtotal_genero"
+    ) %>%
+    select(rodal, genero_grupo, nombre_cientifico, n_sitios, vol_m3ha,
+           vol_ic_inf, vol_ic_sup, tipo_fila)
+  
+  # ==========================================================================
+  # PASO 4: AGREGAR SUBTOTALES POR UMM Y TOTAL GENERAL
+  # ==========================================================================
+  
+  cat("[PASO 4] Agregando subtotales por UMM y total general...\n")
+  
+  # Subtotal por UMM (suma Pinus + Quercus, CON IC)
+  # Calcular CV combinado para el subtotal
+  subtotal_umm <- subtotales_genero %>%
+    group_by(rodal) %>%
+    summarise(
+      vol_m3ha_suma = sum(vol_m3ha),
+      .groups = "drop"
+    ) %>%
+    # Calcular CV combinado como promedio ponderado de CVs de Pinus y Quercus
+    mutate(
+      cv_combinado = {
+        cv_pinus <- cv_por_genero$vol_cv[cv_por_genero$genero_grupo == "Pinus"]
+        cv_quercus <- cv_por_genero$vol_cv[cv_por_genero$genero_grupo == "Quercus"]
+        # Promedio simple de los CVs (aproximación conservadora)
+        (cv_pinus + cv_quercus) / 2
+      }
+    ) %>%
+    rowwise() %>%
+    mutate(
+      vol_ic = list(calcular_ic_con_cv(vol_m3ha_suma, cv_combinado, n_sitios_predio))
+    ) %>%
+    ungroup() %>%
+    transmute(
+      rodal,
+      genero_grupo = "TOTAL",
+      nombre_cientifico = "Subtotal UMM",
+      n_sitios = n_sitios_predio,
+      vol_m3ha = vol_m3ha_suma,
+      vol_ic_inf = map_dbl(vol_ic, ~.x$ic_inf),
+      vol_ic_sup = map_dbl(vol_ic, ~.x$ic_sup),
+      tipo_fila = "subtotal_umm"
+    )
+  
+  # Total general por género (promedio ponderado por superficie)
+  total_genero <- subtotales_genero %>%
+    left_join(superficie_por_rodal, by = "rodal") %>%
+    group_by(genero_grupo) %>%
+    summarise(
+      vol_m3ha_ponderada = weighted.mean(vol_m3ha, superficie_ha, na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    left_join(cv_por_genero %>% select(genero_grupo, vol_cv), by = "genero_grupo") %>%
+    rowwise() %>%
+    mutate(
+      vol_ic = list(calcular_ic_con_cv(vol_m3ha_ponderada, vol_cv, n_sitios_predio))
+    ) %>%
+    ungroup() %>%
+    transmute(
+      rodal = "TOTAL",
+      genero_grupo,
+      nombre_cientifico = paste("Total", genero_grupo),
+      n_sitios = n_sitios_predio,
+      vol_m3ha = vol_m3ha_ponderada,
+      vol_ic_inf = map_dbl(vol_ic, ~.x$ic_inf),
+      vol_ic_sup = map_dbl(vol_ic, ~.x$ic_sup),
+      tipo_fila = "total_genero"
+    )
+  
+  # Total general (suma de todos con IC)
+  total_general <- total_genero %>%
+    summarise(
+      vol_m3ha_suma = sum(vol_m3ha),
+      .groups = "drop"
+    ) %>%
+    mutate(
+      cv_combinado = {
+        cv_pinus <- cv_por_genero$vol_cv[cv_por_genero$genero_grupo == "Pinus"]
+        cv_quercus <- cv_por_genero$vol_cv[cv_por_genero$genero_grupo == "Quercus"]
+        (cv_pinus + cv_quercus) / 2
+      }
+    ) %>%
+    rowwise() %>%
+    mutate(
+      vol_ic = list(calcular_ic_con_cv(vol_m3ha_suma, cv_combinado, n_sitios_predio))
+    ) %>%
+    ungroup() %>%
+    transmute(
+      rodal = "TOTAL",
+      genero_grupo = "TOTAL",
+      nombre_cientifico = "Total General",
+      n_sitios = n_sitios_predio,
+      vol_m3ha = vol_m3ha_suma,
+      vol_ic_inf = map_dbl(vol_ic, ~.x$ic_inf),
+      vol_ic_sup = map_dbl(vol_ic, ~.x$ic_sup),
+      tipo_fila = "total_general"
+    )
+  
+  # ==========================================================================
+  # PASO 5: ENSAMBLAR TABLA FINAL
+  # ==========================================================================
+  
+  cat("[PASO 5] Ensamblando tabla final...\n")
+  
+  # Ensamblar: especies + subtotales género + subtotales UMM + totales
+  tabla_final <- bind_rows(
+    tabla_especies_con_ic,
+    subtotales_genero,
+    subtotal_umm,
+    total_genero,
+    total_general
+  ) %>%
+    left_join(superficie_por_rodal, by = "rodal") %>%
+    mutate(
+      superficie_ha = ifelse(rodal == "TOTAL", NA_real_, superficie_ha)
+    ) %>%
+    arrange(rodal, genero_grupo, nombre_cientifico)
+  
+  cat(sprintf("  ✓ Tabla final: %d filas\n", nrow(tabla_final)))
+  
+  # ==========================================================================
+  # EXPORTAR CSV
+  # ==========================================================================
+  
+  if (exportar_csv_flag) {
+    cat("\n[EXPORTANDO CSV]\n")
+    dir.create("resultados", showWarnings = FALSE, recursive = TRUE)
+    
+    write.csv(tabla_final, 
+              "resultados/analisis_dasometrico_ic_cv.csv", 
+              row.names = FALSE)
+    cat("  ✓ CSV: analisis_dasometrico_ic_cv.csv\n")
+  }
+  
+  # ==========================================================================
+  # EXPORTAR LATEX
+  # ==========================================================================
+  
+  if (exportar_latex) {
+    cat("\n[GENERANDO LATEX]\n")
+    dir.create("tablas_latex", showWarnings = FALSE, recursive = TRUE)
+    
+    # Función para formatear con IC
+    formatear_con_ic <- function(media, ic_inf, ic_sup) {
+      media_str <- formatear_3_cifras_sig(media)
+      ic_inf_str <- formatear_3_cifras_sig(ic_inf)
+      ic_sup_str <- formatear_3_cifras_sig(ic_sup)
+      
+      tiene_ic <- !is.na(ic_inf) & !is.na(ic_sup)
+      result <- media_str
+      result[tiene_ic] <- sprintf("%s (%s--%s)", 
+                                  media_str[tiene_ic],
+                                  ic_inf_str[tiene_ic],
+                                  ic_sup_str[tiene_ic])
+      return(result)
+    }
+    
+    # Preparar para LaTeX
+    tabla_latex <- tabla_final %>%
+      mutate(
+        UMM = rodal,
+        Sup_ha = ifelse(is.na(superficie_ha), "--", formatear_3_cifras_sig(superficie_ha)),
+        Especie = nombre_cientifico,
+        ER = formatear_con_ic(vol_m3ha, vol_ic_inf, vol_ic_sup),
+        es_subtotal = tipo_fila %in% c("subtotal_genero", "subtotal_umm", 
+                                       "total_genero", "total_general")
+      )
+    
+    # Calcular número de filas por UMM (para multirow)
+    filas_por_umm <- tabla_latex %>%
+      filter(UMM != "TOTAL") %>%
+      group_by(UMM) %>%
+      summarise(n_filas = n(), .groups = "drop")
+    
+    # Generar LaTeX
+    latex_content <- c(
+      "% ============================================================",
+      "% TABLA: Existencias Reales por Especie y UMM (IC 95% con CV)",
+      "% ============================================================",
+      "% Requiere: \\usepackage{multirow}",
+      "\\begin{table}[H]",
+      "\t\\centering",
+      "\t\\caption{Existencias reales por especie y UMM (IC 95\\% basado en CV, n=58)}",
+      "\t\\label{tab:existencias_reales}",
+      "\t\\scriptsize",
+      "\t\\begin{tabular}{ccp{5cm}c}",
+      "\t\t\\toprule",
+      "\t\t\\textbf{UMM} & \\textbf{Sup (ha)} & \\textbf{Especie/Categoría} & \\textbf{Exist. Reales (m³/ha)} \\\\",
+      "\t\t\\midrule"
+    )
+    
+    umm_actual <- NULL
+    ultimo_genero <- NULL
+    
+    for (i in 1:nrow(tabla_latex)) {
+      fila <- tabla_latex[i, ]
+      
+      # Determinar si es primera fila de UMM
+      es_primera_fila_umm <- is.null(umm_actual) || fila$UMM != umm_actual
+      
+      # Valores de UMM y Sup con multirow
+      if (es_primera_fila_umm && fila$UMM != "TOTAL") {
+        # Obtener número de filas para este UMM
+        n_filas_umm <- filas_por_umm$n_filas[filas_por_umm$UMM == fila$UMM]
+        umm_col <- sprintf("\\multirow{%d}{*}{%s}", n_filas_umm, fila$UMM)
+        sup_col <- sprintf("\\multirow{%d}{*}{%s}", n_filas_umm, fila$Sup_ha)
+      } else if (fila$UMM == "TOTAL") {
+        # Pour filas TOTAL, no usar multirow
+        umm_col <- fila$UMM
+        sup_col <- fila$Sup_ha
+      } else {
+        # Filas subsecuentes: vacío
+        umm_col <- ""
+        sup_col <- ""
+      }
+      
+      # Separador entre UMMs (solo antes de primera especie de nueva UMM)
+      if (es_primera_fila_umm && 
+          !is.null(umm_actual) && 
+          fila$UMM != "TOTAL" &&
+          fila$tipo_fila == "especie") {
+        latex_content <- c(latex_content, "\t\t\\midrule")
+      }
+      
+      # Formato según tipo de fila
+      if (fila$tipo_fila == "especie") {
+        # Especies en itálica
+        linea <- sprintf("\t\t%s & %s & \\textit{%s} & %s \\\\",
+                         umm_col, sup_col, fila$Especie, fila$ER)
+        ultimo_genero <- fila$genero_grupo
+        
+      } else if (fila$tipo_fila == "subtotal_genero") {
+        # Subtotal género: extraer nombre del género de "Subtotal Pinus"
+        genero_nombre <- gsub("Subtotal ", "", fila$Especie)
+        # Subtotal con género en itálica: Subtotal \textit{Pinus}
+        linea <- sprintf("\t\t\\rowcolor{gray!15}%s & %s & \\textbf{Subtotal \\textit{%s}} & \\textbf{%s} \\\\",
+                         umm_col, sup_col, genero_nombre, fila$ER)
+        
+      } else if (fila$tipo_fila == "subtotal_umm") {
+        # Subtotal UMM con fondo gris más oscuro
+        linea <- sprintf("\t\t\\rowcolor{gray!25}%s & %s & \\textbf{%s} & \\textbf{%s} \\\\",
+                         umm_col, sup_col, fila$Especie, fila$ER)
+        
+      } else if (fila$tipo_fila %in% c("total_genero", "total_general")) {
+        # Agregar midrule antes del primer total
+        if (fila$tipo_fila == "total_genero" && 
+            (is.null(umm_actual) || umm_actual != "TOTAL")) {
+          latex_content <- c(latex_content, "\t\t\\midrule")
+        }
+        
+        # Para totales por género: "Total Pinus" → "Total \textit{Pinus}"
+        if (fila$tipo_fila == "total_genero") {
+          genero_nombre <- gsub("Total ", "", fila$Especie)
+          especie_formateada <- sprintf("\\textbf{Total \\textit{%s}}", genero_nombre)
+        } else {
+          especie_formateada <- sprintf("\\textbf{%s}", fila$Especie)
+        }
+        
+        linea <- sprintf("\t\t\\rowcolor{gray!15}%s & %s & %s & \\textbf{%s} \\\\",
+                         umm_col, sup_col, especie_formateada, fila$ER)
+      } else {
+        # Fallback
+        linea <- sprintf("\t\t%s & %s & %s & %s \\\\",
+                         umm_col, sup_col, fila$Especie, fila$ER)
+      }
+      
+      latex_content <- c(latex_content, linea)
+      
+      # Actualizar UMM actual
+      if (fila$tipo_fila == "especie" || fila$tipo_fila == "subtotal_genero" || 
+          fila$tipo_fila == "subtotal_umm") {
+        umm_actual <- fila$UMM
+      }
+    }
+    
+    latex_content <- c(
+      latex_content,
+      "\t\t\\bottomrule",
+      "\t\\end{tabular}",
+      "\t\\\\[0.3cm]",
+      sprintf("\t{\\scriptsize IC 95\\%% calculados con CV a nivel predio (n=%d, NOM-152).}", n_sitios_predio),
+      "\t\\\\",
+      sprintf("\t{\\scriptsize Subtotales por género incluyen todas las especies del género. Formato: 3 cifras significativas.}"),
+      "\\end{table}"
+    )
+    
+    writeLines(latex_content, "tablas_latex/existencias_reales_por_especie.tex")
+    cat("  ✓ LaTeX: existencias_reales_por_especie.tex\n")
+  }
+  
+  cat("\n✓ Análisis completado\n")
+  cat(sprintf("  Método: IC basado en CV (n=%d)\n\n", n_sitios_predio))
+  
+  return(list(
+    tabla_final = tabla_final,
+    cv_por_genero = cv_por_genero,
+    n_sitios = n_sitios_predio
+  ))
+}
 analizar_erosion <- function(f01, exportar_latex = TRUE, exportar_csv_flag = TRUE) {
   
   cat("\nâ•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—\n")
@@ -851,129 +1424,352 @@ analizar_sanidad <- function(arboles_df, config = CONFIG,
 }
 
 # ==============================================================================
-# 5. REGENERACIÃ“N - PINUS/QUERCUS + DENSIDAD=0 + CSV
+# 5. REGENERACIÓN - VERSIÓN CORREGIDA
+# ==============================================================================
+# CAMBIOS CRÍTICOS:
+# 1. Mantiene 3 clases de tamaño separadas (0-25, 25-150, 150-275 cm)
+# 2. NO hace upscaling automático (números observados en parcela 9m²)
+# 3. Incluye TODAS las especies, no solo Pinus/Quercus
+# 4. Agrega columna UMM (rodal) desde F01
+# 5. Preserva edad_media y diam_medio por clase
+# 6. Exporta formato largo: sitio-especie-clase-individuos
 # ==============================================================================
 
 analizar_regeneracion <- function(f05, f01, config = CONFIG, 
                                   exportar_latex = TRUE,
                                   exportar_csv_flag = TRUE) {
   
-  cat("\nâ•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—\n")
-  cat("â•‘   REGENERACIÃ“N: Pinus/Quercus + densidad=0 + CSV          â•‘\n")
-  cat("â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•\n\n")
+  cat("\n╔═══════════════════════════════════════════════════════════╗\n")
+  cat("║   REGENERACIÓN: Estructura por clase de tamaño           ║\n")
+  cat("╚═══════════════════════════════════════════════════════════╝\n\n")
   
   if (!exists("ESPECIES")) {
-    stop("âŒ ESPECIES no estÃ¡ cargado")
+    stop("✖ ESPECIES no está cargado")
   }
   
-  # 1. TODOS LOS SITIOS
-  todos_sitios <- f01 %>%
+  # ===========================================================================
+  # 1. MAPEO SITIO → UMM (RODAL)
+  # ===========================================================================
+  
+  sitios_umm <- f01 %>%
     select(muestreo, rodal) %>%
     distinct()
   
-  n_sitios_total <- nrow(todos_sitios)
+  n_sitios_total <- nrow(sitios_umm)
   
   cat(sprintf("Total de sitios en inventario: %d\n", n_sitios_total))
+  cat(sprintf("Rodales únicos: %d\n\n", n_distinct(sitios_umm$rodal)))
   
-  # 2. REGENERACIÃ“N OBSERVADA (solo Pinus/Quercus)
-  regeneracion_obs <- f05 %>%
+  # ===========================================================================
+  # 2. PROCESAR DATOS DE REGENERACIÓN - TODAS LAS ESPECIES
+  # ===========================================================================
+  
+  # Agregar información de especies
+  f05_especies <- f05 %>%
     left_join(ESPECIES %>% select(codigo, nombre_cientifico, genero), 
-              by = c("especie" = "codigo")) %>%
-    filter(genero %in% c("Pinus", "Quercus")) %>%
+              by = c("especie" = "codigo"))
+  
+  # Verificar especies no encontradas
+  especies_no_encontradas <- f05_especies %>%
+    filter(is.na(nombre_cientifico)) %>%
+    select(especie) %>%
+    distinct()
+  
+  if (nrow(especies_no_encontradas) > 0) {
+    cat("⚠ ESPECIES NO ENCONTRADAS EN CATÁLOGO:\n")
+    print(especies_no_encontradas)
+    cat("\n")
+  }
+  
+  # ===========================================================================
+  # 3. TRANSFORMAR A FORMATO LARGO (UNA FILA POR SITIO-ESPECIE-CLASE)
+  # ===========================================================================
+  
+  regeneracion_long <- f05_especies %>%
+    # Agregar UMM
+    left_join(sitios_umm, by = "muestreo") %>%
+    # Seleccionar columnas relevantes
+    select(
+      muestreo,
+      rodal,
+      especie,
+      nombre_cientifico,
+      genero,
+      # Clase 1: 0-25 cm altura
+      num_individuos_clase1 = frec_025_150,
+      edad_media_clase1 = edad_media_025_150,
+      diam_medio_clase1 = diametro_medio_025_150,
+      # Clase 2: 25-150 cm altura  
+      num_individuos_clase2 = frec_151_275,
+      edad_media_clase2 = edad_media_151_275,
+      diam_medio_clase2 = diametro_medio_151_275,
+      # Clase 3: 150-275 cm altura
+      num_individuos_clase3 = frec_276_400,
+      edad_media_clase3 = edad_media_276_400,
+      diam_medio_clase3 = diametro_medio_276_400
+    ) %>%
+    # Transformar a formato largo
+    pivot_longer(
+      cols = starts_with(c("num_individuos_", "edad_media_", "diam_medio_")),
+      names_to = c(".value", "clase"),
+      names_pattern = "(.+)_clase(\\d+)"
+    ) %>%
+    # Agregar etiquetas de clase
     mutate(
-      total_individuos = frec_025_150 + frec_151_275 + frec_276_400,
-      densidad_ha = expandir_a_hectarea(total_individuos, config$area_parcela_regeneracion_ha)
+      clase_tamaño = case_when(
+        clase == "1" ~ "0-25 cm",
+        clase == "2" ~ "25-150 cm",
+        clase == "3" ~ "150-275 cm",
+        TRUE ~ NA_character_
+      )
     ) %>%
-    filter(!is.na(genero), !is.na(densidad_ha), is.finite(densidad_ha))
-  
-  cat(sprintf("Sitios CON regeneraciÃ³n observada (Pinus/Quercus): %d\n", 
-              n_distinct(regeneracion_obs$muestreo)))
-  
-  # 3. COMPLETAR CON SITIOS SIN REGENERACIÃ“N (densidad = 0)
-  regeneracion_completa <- expand_grid(
-    muestreo = todos_sitios$muestreo,
-    genero = c("Pinus", "Quercus")
-  ) %>%
-    left_join(todos_sitios, by = "muestreo") %>%
-    left_join(
-      regeneracion_obs %>% 
-        group_by(muestreo, genero) %>%
-        summarise(densidad_ha = sum(densidad_ha), .groups = "drop"),
-      by = c("muestreo", "genero")
+    # Renombrar columnas finales
+    rename(
+      UMM = rodal,
+      codigo_especie = especie,
+      num_individuos = num_individuos,
+      edad_media_años = edad_media,
+      diam_medio_cm = diam_medio
     ) %>%
-    mutate(densidad_ha = replace_na(densidad_ha, 0))
+    # Filtrar solo registros con individuos
+    filter(!is.na(num_individuos) & num_individuos > 0) %>%
+    # Reordenar columnas
+    select(
+      muestreo,
+      UMM,
+      codigo_especie,
+      nombre_cientifico,
+      genero,
+      clase_tamaño,
+      num_individuos,
+      edad_media_años,
+      diam_medio_cm
+    ) %>%
+    # Ordenar
+    arrange(muestreo, codigo_especie, clase_tamaño)
   
-  cat(sprintf("\nSitios con regeneraciÃ³n = 0: %d\n", 
-              sum(regeneracion_completa$densidad_ha == 0)))
-  cat(sprintf("Sitios con regeneraciÃ³n > 0: %d\n\n", 
-              sum(regeneracion_completa$densidad_ha > 0)))
+  cat(sprintf("✓ Datos transformados: %d registros con regeneración > 0\n", 
+              nrow(regeneracion_long)))
+  cat(sprintf("  Sitios con regeneración: %d\n", 
+              n_distinct(regeneracion_long$muestreo)))
+  cat(sprintf("  Especies diferentes: %d\n", 
+              n_distinct(regeneracion_long$codigo_especie)))
+  cat(sprintf("  Total individuos contados: %d\n\n", 
+              sum(regeneracion_long$num_individuos)))
   
-  # 4. RESUMEN POR GÃ‰NERO
-  resumen_regeneracion <- regeneracion_completa %>%
-    group_by(genero) %>%
+  # ===========================================================================
+  # 4. RESUMEN POR GÉNERO Y CLASE
+  # ===========================================================================
+  
+  cat("═══════════════════════════════════════════════════════════\n")
+  cat("RESUMEN POR GÉNERO Y CLASE DE TAMAÑO\n")
+  cat("═══════════════════════════════════════════════════════════\n\n")
+  
+  resumen_genero_clase <- regeneracion_long %>%
+    group_by(genero, clase_tamaño) %>%
     summarise(
-      n_sitios_total = n(),
-      n_sitios_con_regen = sum(densidad_ha > 0),
-      pct_presencia = (n_sitios_con_regen / n_sitios_total) * 100,
-      densidad_media_ha = mean(densidad_ha),
-      densidad_mediana_ha = median(densidad_ha),
-      densidad_min_ha = min(densidad_ha),
-      densidad_max_ha = max(densidad_ha),
+      n_sitios = n_distinct(muestreo),
+      n_UMM = n_distinct(UMM),
+      total_individuos = sum(num_individuos),
+      media_individuos = mean(num_individuos),
+      mediana_individuos = median(num_individuos),
+      min_individuos = min(num_individuos),
+      max_individuos = max(num_individuos),
       .groups = "drop"
     )
   
-  cat("[REGENERACIÃ“N - Solo Pinus/Quercus - Parcela 9 mÂ²]\n")
-  print(resumen_regeneracion)
+  print(resumen_genero_clase)
   
-  # EXPORTAR CSV
+  # ===========================================================================
+  # 5. RESUMEN POR ESPECIE Y CLASE
+  # ===========================================================================
+  
+  cat("\n═══════════════════════════════════════════════════════════\n")
+  cat("RESUMEN POR ESPECIE Y CLASE DE TAMAÑO\n")
+  cat("═══════════════════════════════════════════════════════════\n\n")
+  
+  resumen_especie_clase <- regeneracion_long %>%
+    group_by(nombre_cientifico, genero, clase_tamaño) %>%
+    summarise(
+      n_sitios = n_distinct(muestreo),
+      n_UMM = n_distinct(UMM),
+      total_individuos = sum(num_individuos),
+      .groups = "drop"
+    ) %>%
+    arrange(desc(total_individuos))
+  
+  print(resumen_especie_clase, n = 50)
+  
+  # ===========================================================================
+  # 6. RESUMEN GENERAL POR GÉNERO (TODAS LAS CLASES COMBINADAS)
+  # ===========================================================================
+  
+  cat("\n═══════════════════════════════════════════════════════════\n")
+  cat("RESUMEN GENERAL POR GÉNERO (todas las clases)\n")
+  cat("═══════════════════════════════════════════════════════════\n\n")
+  
+  resumen_genero_total <- regeneracion_long %>%
+    group_by(genero) %>%
+    summarise(
+      n_sitios = n_distinct(muestreo),
+      n_UMM = n_distinct(UMM),
+      total_individuos = sum(num_individuos),
+      pct_individuos = (total_individuos / sum(regeneracion_long$num_individuos)) * 100,
+      .groups = "drop"
+    ) %>%
+    arrange(desc(total_individuos))
+  
+  print(resumen_genero_total)
+  
+  # ===========================================================================
+  # 7. EXPORTAR CSV
+  # ===========================================================================
+  
   if (exportar_csv_flag) {
     cat("\n[EXPORTANDO CSV]\n")
-    exportar_csv(regeneracion_completa, "desc_09_regeneracion_completa")
-    exportar_csv(resumen_regeneracion, "desc_10_regeneracion_resumen")
+    
+    # Datos observados (formato largo)
+    exportar_csv(regeneracion_long, "desc_09_regeneracion_observada")
+    
+    # Resúmenes
+    exportar_csv(resumen_genero_clase, "desc_10_regeneracion_resumen_genero_clase")
+    exportar_csv(resumen_especie_clase, "desc_11_regeneracion_resumen_especie_clase")
+    exportar_csv(resumen_genero_total, "desc_12_regeneracion_resumen_genero_total")
+    
+    cat("\n")
   }
   
-  # 5. GRÃFICO - PALETA COLORBLIND-FRIENDLY
-  p_regen <- ggplot(regeneracion_completa, 
-                    aes(x = genero, y = densidad_ha, fill = genero)) +
-    geom_boxplot(alpha = 0.7, outlier.alpha = 0.5) +
+  # ===========================================================================
+  # 8. GRÁFICOS
+  # ===========================================================================
+  
+  # Gráfico 1: Distribución por género y clase
+  p1_genero_clase <- ggplot(
+    resumen_genero_clase,
+    aes(x = genero, y = total_individuos, fill = clase_tamaño)
+  ) +
+    geom_col(position = "dodge", alpha = 0.8) +
     scale_fill_manual(
-      values = c("Quercus" = "#E69F00", "Pinus" = "#56B4E9")
+      values = c(
+        "0-25 cm" = "#E69F00",
+        "25-150 cm" = "#56B4E9", 
+        "150-275 cm" = "#009E73"
+      )
     ) +
     labs(
-      title = "Densidad de RegeneraciÃ³n Natural (Pinus y Quercus)",
-      subtitle = sprintf("Parcela 9 mÂ² (0.0009 ha) - Incluye sitios sin regeneraciÃ³n (n=%d)", 
-                         n_sitios_total),
-      x = "GÃ©nero",
-      y = "Densidad (individuos/ha)",
-      fill = "GÃ©nero"
+      title = "Regeneración Natural por Género y Clase de Tamaño",
+      subtitle = sprintf("Parcela 9 m² - %d sitios", n_sitios_total),
+      x = "Género",
+      y = "Total de individuos",
+      fill = "Clase de altura"
     ) +
     theme_minimal(base_size = 11) +
     theme(
-      legend.position = "none",
+      plot.title = element_text(face = "bold"),
+      axis.text.x = element_text(angle = 45, hjust = 1)
+    )
+  
+  # Gráfico 2: Top 10 especies
+  top10_especies <- resumen_especie_clase %>%
+    group_by(nombre_cientifico) %>%
+    summarise(total = sum(total_individuos), .groups = "drop") %>%
+    top_n(10, total) %>%
+    pull(nombre_cientifico)
+  
+  p2_top_especies <- regeneracion_long %>%
+    filter(nombre_cientifico %in% top10_especies) %>%
+    group_by(nombre_cientifico, clase_tamaño) %>%
+    summarise(total = sum(num_individuos), .groups = "drop") %>%
+    ggplot(aes(x = reorder(nombre_cientifico, total), y = total, fill = clase_tamaño)) +
+    geom_col(alpha = 0.8) +
+    scale_fill_manual(
+      values = c(
+        "0-25 cm" = "#E69F00",
+        "25-150 cm" = "#56B4E9", 
+        "150-275 cm" = "#009E73"
+      )
+    ) +
+    coord_flip() +
+    labs(
+      title = "Top 10 Especies en Regeneración",
+      subtitle = "Por clase de tamaño",
+      x = NULL,
+      y = "Total de individuos",
+      fill = "Clase de altura"
+    ) +
+    theme_minimal(base_size = 11) +
+    theme(
       plot.title = element_text(face = "bold")
     )
   
+  # ===========================================================================
+  # 9. EXPORTAR LATEX Y GRÁFICOS
+  # ===========================================================================
+  
   if (exportar_latex) {
-    xtable(resumen_regeneracion,
-           caption = "RegeneraciÃ³n de Pinus y Quercus (parcela 9 mÂ², incluye densidad=0)",
-           label = "tab:regeneracion",
-           digits = c(0, 0, 0, 0, 1, 1, 1, 1, 1)) %>%
-      print(file = "tablas_latex/desc_06_regeneracion.tex",
-            include.rownames = FALSE, 
-            floating = TRUE, 
-            booktabs = TRUE,
-            sanitize.text.function = identity)
+    dir.create("tablas_latex", showWarnings = FALSE, recursive = TRUE)
+    dir.create("graficos", showWarnings = FALSE, recursive = TRUE)
     
-    ggsave("graficos/desc_04_regeneracion.png", p_regen,
-           width = 8, height = 6, dpi = 300)
+    # Tabla 1: Resumen por género y clase
+    xtable(
+      resumen_genero_clase,
+      caption = "Regeneración por género y clase de tamaño (parcela 9 m²)",
+      label = "tab:regeneracion_genero_clase",
+      digits = c(0, 0, 0, 0, 0, 0, 1, 1, 0, 0)
+    ) %>%
+      print(
+        file = "tablas_latex/desc_06_regeneracion_genero_clase.tex",
+        include.rownames = FALSE, 
+        floating = TRUE, 
+        booktabs = TRUE,
+        sanitize.text.function = identity
+      )
     
-    cat("\nâœ“ Tabla y grÃ¡fico de regeneraciÃ³n exportados\n")
+    # Tabla 2: Top 20 especies
+    xtable(
+      resumen_especie_clase %>% head(20),
+      caption = "Top 20 especies en regeneración por clase de tamaño",
+      label = "tab:regeneracion_especies",
+      digits = c(0, 0, 0, 0, 0, 0, 0)
+    ) %>%
+      print(
+        file = "tablas_latex/desc_07_regeneracion_especies.tex",
+        include.rownames = FALSE, 
+        floating = TRUE, 
+        booktabs = TRUE,
+        sanitize.text.function = identity
+      )
+    
+    # Gráficos
+    ggsave(
+      "graficos/desc_04_regeneracion_genero_clase.png",
+      p1_genero_clase,
+      width = 10, height = 6, dpi = 300
+    )
+    
+    ggsave(
+      "graficos/desc_05_regeneracion_top10_especies.png",
+      p2_top_especies,
+      width = 10, height = 8, dpi = 300
+    )
+    
+    cat("✓ Tablas LaTeX y gráficos exportados\n\n")
   }
   
+  # ===========================================================================
+  # 10. RETORNAR RESULTADOS
+  # ===========================================================================
+  
   return(list(
-    datos_completos = regeneracion_completa,
-    resumen = resumen_regeneracion,
-    grafico = p_regen
+    datos_observados = regeneracion_long,
+    resumen_genero_clase = resumen_genero_clase,
+    resumen_especie_clase = resumen_especie_clase,
+    resumen_genero_total = resumen_genero_total,
+    grafico_genero_clase = p1_genero_clase,
+    grafico_top_especies = p2_top_especies,
+    n_sitios_total = n_sitios_total,
+    n_sitios_con_regeneracion = n_distinct(regeneracion_long$muestreo),
+    total_individuos = sum(regeneracion_long$num_individuos)
   ))
 }
 
@@ -1230,10 +2026,95 @@ analizar_tratamientos_silvicolas <- function(inventario_f01,
   print(ts_por_rodal)
   
   # ============================================================================
-  # F. GRÁFICOS
+  # F. LISTA COMPLETA DE TC POR RODAL/UMM
   # ============================================================================
   
-  cat("\n[F] Generando gráficos...\n")
+  cat("\n[F] Generando lista completa de TC por rodal/UMM...\n")
+  
+  # Crear dataset detallado con todos los TC por sitio
+  tc_detallado <- df_ts %>%
+    # Pivotear para tener todos los TC en una sola columna
+    pivot_longer(
+      cols = starts_with("tc"),
+      names_to = "tc_tipo",
+      values_to = "tc_codigo"
+    ) %>%
+    filter(!is.na(tc_codigo)) %>%
+    # Agregar etiquetas descriptivas
+    left_join(CODIGOS_TRATAMIENTO %>% select(ts_codigo = codigo, ts_etiqueta = etiqueta),
+              by = c("ts" = "ts_codigo")) %>%
+    left_join(CODIGOS_TRATAMIENTO_COMP %>% select(tc_codigo = codigo, tc_etiqueta = etiqueta),
+              by = "tc_codigo") %>%
+    # Ordenar y seleccionar columnas relevantes
+    mutate(
+      tc_tipo = str_to_upper(tc_tipo),
+      tc_tipo_num = as.integer(str_extract(tc_tipo, "[0-9]"))
+    ) %>%
+    arrange(rodal, muestreo, tc_tipo_num) %>%
+    select(
+      rodal,
+      unidad_manejo,
+      muestreo,
+      ts_codigo = ts,
+      ts_etiqueta,
+      tc_tipo,
+      tc_codigo,
+      tc_etiqueta
+    )
+  
+  # Resumen por rodal/UMM
+  tc_por_rodal <- tc_detallado %>%
+    group_by(rodal, unidad_manejo) %>%
+    summarise(
+      n_sitios_con_tc = n_distinct(muestreo),
+      n_total_tc = n(),
+      tc_lista = paste(sort(unique(tc_codigo)), collapse = ", "),
+      tc_etiquetas = paste(sort(unique(tc_etiqueta)), collapse = " | "),
+      .groups = "drop"
+    ) %>%
+    # Agregar información de TS predominante del rodal
+    left_join(
+      df_ts %>%
+        group_by(rodal) %>%
+        summarise(
+          ts_predominante = as.numeric(names(sort(table(ts), decreasing = TRUE)[1])),
+          n_sitios_total = n(),
+          .groups = "drop"
+        ),
+      by = "rodal"
+    ) %>%
+    left_join(CODIGOS_TRATAMIENTO %>% select(ts_predominante = codigo, ts_etiqueta = etiqueta),
+              by = "ts_predominante") %>%
+    # Calcular porcentaje de sitios con TC
+    mutate(
+      pct_sitios_con_tc = round(n_sitios_con_tc / n_sitios_total * 100, 1)
+    ) %>%
+    select(
+      rodal,
+      unidad_manejo,
+      n_sitios_total,
+      n_sitios_con_tc,
+      pct_sitios_con_tc,
+      ts_predominante,
+      ts_etiqueta,
+      n_total_tc,
+      tc_lista,
+      tc_etiquetas
+    ) %>%
+    arrange(rodal)
+  
+  cat("\n  Resumen TC por rodal:\n")
+  print(tc_por_rodal)
+  
+  # Detalle completo por sitio
+  cat("\n  Muestra del detalle completo (primeros 10 registros):\n")
+  print(tc_detallado %>% head(10))
+  
+  # ============================================================================
+  # G. GRÁFICOS
+  # ============================================================================
+  
+  cat("\n[G] Generando gráficos...\n")
   
   # Gráfico 1: Distribución TS
   p_ts <- dist_ts %>%
@@ -1312,12 +2193,32 @@ analizar_tratamientos_silvicolas <- function(inventario_f01,
       legend.position = "top"
     )
   
+  # Gráfico 4: Distribución de TC por rodal
+  if (nrow(tc_por_rodal) > 0) {
+    p_tc_por_rodal <- tc_por_rodal %>%
+      ggplot(aes(x = reorder(as.character(rodal), n_total_tc), y = n_total_tc)) +
+      geom_col(fill = "darkgreen", alpha = 0.7) +
+      geom_text(aes(label = n_total_tc), 
+                vjust = -0.5, size = 3) +
+      labs(
+        title = "Número total de TC por rodal",
+        subtitle = "Suma de TC1, TC2 y TC3 en todos los sitios del rodal",
+        x = "Rodal",
+        y = "Número total de TC"
+      ) +
+      theme_minimal(base_size = 11) +
+      theme(
+        plot.title = element_text(face = "bold"),
+        axis.text.x = element_text(angle = 45, hjust = 1)
+      )
+  }
+  
   # ============================================================================
-  # G. EXPORTAR RESULTADOS
+  # H. EXPORTAR RESULTADOS
   # ============================================================================
   
   if (exportar_csv_flag) {
-    cat("\n[G] Exportando CSV...\n")
+    cat("\n[H] Exportando CSV...\n")
     exportar_csv(dist_ts, "desc_14_ts_distribucion")
     if (nrow(dist_tc_all) > 0) {
       exportar_csv(dist_tc_all, "desc_15_tc_distribucion")
@@ -1327,10 +2228,18 @@ analizar_tratamientos_silvicolas <- function(inventario_f01,
     }
     exportar_csv(completitud_ts, "desc_17_ts_completitud")
     exportar_csv(ts_por_rodal, "desc_18_ts_por_rodal")
+    
+    # Exportar los nuevos archivos CSV de TC por rodal
+    exportar_csv(tc_detallado, "desc_19_tc_detallado")
+    exportar_csv(tc_por_rodal, "desc_20_tc_por_rodal")
+    
+    cat("  ✔ Nuevos archivos CSV exportados:\n")
+    cat("     - desc_19_tc_detallado.csv (detalle por sitio)\n")
+    cat("     - desc_20_tc_por_rodal.csv (resumen por rodal/UMM)\n")
   }
   
   if (exportar_latex) {
-    cat("\n[H] Exportando LaTeX y gráficos...\n")
+    cat("\n[I] Exportando LaTeX y gráficos...\n")
     
     # Tabla TS
     xtable(dist_ts %>% select(-ts),
@@ -1359,6 +2268,22 @@ analizar_tratamientos_silvicolas <- function(inventario_f01,
               sanitize.text.function = identity)
     }
     
+    # Tabla TC por rodal
+    if (nrow(tc_por_rodal) > 0) {
+      xtable(tc_por_rodal %>% 
+               select(rodal, unidad_manejo, n_sitios_total, n_sitios_con_tc, 
+                      pct_sitios_con_tc, ts_etiqueta, n_total_tc),
+             caption = "Tratamientos Complementarios por Rodal/UMM",
+             label = "tab:tc_por_rodal",
+             align = c("l", "r", "l", "r", "r", "r", "p{4cm}", "r"),
+             digits = c(0, 0, 0, 0, 0, 1, 0, 0)) %>%
+        print(file = "tablas_latex/desc_16_tc_por_rodal.tex",
+              include.rownames = FALSE,
+              floating = TRUE,
+              booktabs = TRUE,
+              sanitize.text.function = identity)
+    }
+    
     # Gráficos
     ggsave("graficos/desc_13_ts_distribucion.png", p_ts,
            width = 10, height = 6, dpi = 300)
@@ -1371,6 +2296,11 @@ analizar_tratamientos_silvicolas <- function(inventario_f01,
     ggsave("graficos/desc_15_completitud.png", p_completitud,
            width = 10, height = 6, dpi = 300)
     
+    if (exists("p_tc_por_rodal")) {
+      ggsave("graficos/desc_16_tc_por_rodal.png", p_tc_por_rodal,
+             width = 10, height = 6, dpi = 300)
+    }
+    
     cat("  ✔ Tablas LaTeX y gráficos exportados\n")
   }
   
@@ -1382,10 +2312,13 @@ analizar_tratamientos_silvicolas <- function(inventario_f01,
     relacion_ts_tc = relacion_ts_tc,
     completitud_ts = completitud_ts,
     ts_por_rodal = ts_por_rodal,
+    tc_detallado = tc_detallado,
+    tc_por_rodal = tc_por_rodal,
     graficos = list(
       p_ts = p_ts,
       p_tc_comparacion = p_tc_comparacion,
-      p_completitud = p_completitud
+      p_completitud = p_completitud,
+      p_tc_por_rodal = if (exists("p_tc_por_rodal")) p_tc_por_rodal else NULL
     )
   ))
 }
@@ -1393,8 +2326,8 @@ analizar_tratamientos_silvicolas <- function(inventario_f01,
 cat("✔ Función analizar_tratamientos_silvicolas CORREGIDA cargada\n")
 cat("  - Detecta automáticamente nombres de columnas\n")
 cat("  - Maneja TC faltantes (a veces solo 1 o 2 TC)\n")
-cat("  - Compatible con Excel directo o post-importación\n\n")
-
+cat("  - Compatible con Excel directo o post-importación\n")
+cat("  - Exporta CSV con TC por rodal/UMM\n\n")
 
 # ==============================================================================
 # FUNCIÃ“N MAESTRA - ACTUALIZADA CON CORRECCIÃ“N n_sitios
@@ -1409,36 +2342,46 @@ analisis_descriptivo_completo <- function(inventario, arboles_df, config = CONFI
   
   resultados <- list()
   
-  cat("\n[1/8] Estructura poblacional (con AB/ha - CORREGIDO n_sitios)...\n")
+  cat("\n[1/9] Estructura poblacional (con AB/ha - CORREGIDO n_sitios)...\n")
   resultados$estructura <- analizar_estructura_poblacional(arboles_df, config, 
                                                            exportar_csv_flag = exportar_csv_flag)
   
-  cat("\n[2/8] ComposiciÃ³n Pinus/Quercus por rodal (CORREGIDO)...\n")
+  cat("\n[2/9] ComposiciÃ³n Pinus/Quercus por rodal (CORREGIDO)...\n")
   resultados$composicion_generopq_rodal <- analizar_composicion_generopq_por_rodal(arboles_df, config,
                                                                                    exportar_csv_flag = exportar_csv_flag)
   
-  cat("\n[3/8] AB por dominancia (CORREGIDO)...\n")
+  cat("\n[3/9] AB por dominancia (CORREGIDO)...\n")
   resultados$ab_dominancia <- analizar_ab_por_dominancia(arboles_df, config,
                                                          exportar_csv_flag = exportar_csv_flag)
   
-  cat("\n[4/8] DistribuciÃ³n diamÃ©trica (CORREGIDO)...\n")
+  cat("\n[4/9] DistribuciÃ³n diamÃ©trica (CORREGIDO)...\n")
   resultados$distribucion <- analizar_distribucion_diametrica(arboles_df, config,
                                                               exportar_csv_flag = exportar_csv_flag)
   
-  cat("\n[5/8] Condiciones de erosiÃ³n (% sitios)...\n")
+  cat("\n[5/9] Condiciones de erosiÃ³n (% sitios)...\n")
   resultados$erosion <- analizar_erosion(inventario$f01, exportar_csv_flag = exportar_csv_flag)
   
-  cat("\n[6/8] Condiciones sanitarias (CORREGIDO)...\n")
+  cat("\n[6/9] Condiciones sanitarias (CORREGIDO)...\n")
   resultados$sanidad <- analizar_sanidad(arboles_df, config, exportar_csv_flag = exportar_csv_flag)
   
-  cat("\n[7/8] RegeneraciÃ³n (Pinus/Quercus)...\n")
+  cat("\n[7/9] RegeneraciÃ³n (Pinus/Quercus)...\n")
   resultados$regeneracion <- analizar_regeneracion(inventario$f05, inventario$f01, config,
                                                    exportar_csv_flag = exportar_csv_flag)
   
   
-  cat("\n[8/8] Tratamientos silvícolas y complementarios...\n")
+  cat("\n[8/9] Tratamientos silvícolas y complementarios...\n")
   resultados$tratamientos <- analizar_tratamientos_silvicolas(inventario$f01,
-                                                               exportar_csv_flag = exportar_csv_flag)
+                                                              exportar_csv_flag = exportar_csv_flag)
+  
+  
+  cat("\n[9/9] Análisis dasométrico con IC 95% (método CV)...\n")
+  resultados$dasometrico <- analizar_dasometrico_cv(
+    arboles_df = arboles_df,
+    config = config,
+    exportar_csv_flag = exportar_csv_flag,
+    exportar_latex = TRUE
+  )
+  
   
   cat("\nâ•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—\n")
   cat("â•‘           âœ“ ANÃLISIS DESCRIPTIVO COMPLETADO               â•‘\n")

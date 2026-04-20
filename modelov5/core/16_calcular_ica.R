@@ -1,26 +1,26 @@
-# Establecer directorio raíz del proyecto
+# Establecer directorio raÃ­z del proyecto
 if (!exists("PROYECTO_ROOT")) {
   PROYECTO_ROOT <- "/home/fabien/Documents/CONAFOR/Consultoria/Las Alazanas/PMF - 2026 - 2036/Inventario Forestal 102025/R5/modelov5"
 }
 setwd(PROYECTO_ROOT)
 
 # ==============================================================================
-# CÁLCULO DE ICA Y VARIABLES SECCIÓN 11.1.4 DEL MANUAL PMF
+# CÃLCULO DE ICA Y VARIABLES SECCIÃ“N 11.1.4 DEL MANUAL PMF
 # ==============================================================================
 # 
-# Este módulo calcula el ICA sobre 10 años SIN operación forestal para obtener
+# Este módulo calcula el ICA sobre 10 años SIN operaciÃ³n forestal para obtener
 # valores de crecimiento reales derivados del modelo poblacional.
 #
-# Calcula todas las variables mencionadas en la sección 11.1.4 del Manual PMF:
+# Calcula todas las variables mencionadas en la secciÃ³n 11.1.4 del Manual PMF:
 #   - Sup (ha): Superficie por rodal
-#   - IS (m): Índice de Sitio  
-#   - ER (m³/ha): Existencias Reales al inicio
-#   - ICA (m³/ha): Incremento Corriente Anual
+#   - IS (m): Ãndice de Sitio  
+#   - ER (mÂ³/ha): Existencias Reales al inicio
+#   - ICA (mÂ³/ha): Incremento Corriente Anual
 #   - ICA Rel (i): Incremento relativo = ICA/ER
 #   - IntCor Rel (IC): Intensidad de corta relativa = 1 - 1/(1+i)^cc
-#   - VC/ha (m³): Volumen de corta por ha = IC * ER
-#   - ER/rodal (m³): Existencias reales por rodal
-#   - VC/rodal (m³): Volumen de corta por rodal
+#   - VC/ha (mÂ³): Volumen de corta por ha = IC * ER
+#   - ER/rodal (mÂ³): Existencias reales por rodal
+#   - VC/rodal (mÂ³): Volumen de corta por rodal
 #
 # Estos cálculos se realizan por:
 #   - Especie (géneros Pinus y Quercus)
@@ -33,33 +33,33 @@ setwd(PROYECTO_ROOT)
 library(tidyverse)
 library(xtable)
 
-# Cargar utilidades compartidas si no están disponibles
+# Cargar utilidades compartidas si no estÃ¡n disponibles
 if (!exists("calcular_metricas_estado")) {
   source(file.path(PROYECTO_ROOT, "utils/utils_metricas.R"))
 }
 
 # ==============================================================================
-# FUNCIÓN PRINCIPAL: SIMULAR SIN CORTES Y CALCULAR ICA
+# FUNCIÃ“N PRINCIPAL: SIMULAR SIN CORTES Y CALCULAR ICA
 # ==============================================================================
 
 calcular_ica_sin_cortes <- function(arboles_inicial, config = CONFIG, años = 10) {
   
-  cat("\n╔════════════════════════════════════════════════════════════╗\n")
-  cat("║         CÁLCULO DE ICA - SIMULACIÓN SIN CORTES           ║\n")
-  cat("╚════════════════════════════════════════════════════════════╝\n\n")
+  cat("\nâ•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—\n")
+  cat("â•‘         CÃLCULO DE ICA - SIMULACIÃ“N SIN CORTES           â•‘\n")
+  cat("â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•\n\n")
   
-  cat(sprintf("• Período de simulación: %d años\n", años))
-  cat(sprintf("• Población inicial: %d árboles\n", nrow(arboles_inicial)))
-  cat("• Métodos: crecimiento + mortalidad + reclutamiento\n")
-  cat("• Sin operaciones forestales\n\n")
+  cat(sprintf("â€¢ PerÃ­odo de simulación: %d años\n", años))
+  cat(sprintf("â€¢ PoblaciÃ³n inicial: %d árboles\n", nrow(arboles_inicial)))
+  cat("â€¢ MÃ©todos: crecimiento + mortalidad + reclutamiento\n")
+  cat("â€¢ Sin operaciones forestales\n\n")
   
-  # Verificar que los módulos estén cargados
+  # Verificar que los módulos estÃ©n cargados
   if (!exists("aplicar_crecimiento_poblacion")) {
-    stop("❌ Módulos de simulación no cargados. Ejecuta 40_WORKFLOW_COMPLETO.R primero")
+    stop("âŒ MÃ³dulos de simulación no cargados. Ejecuta 40_WORKFLOW_COMPLETO.R primero")
   }
   
   # ===========================================================================
-  # 1. SIMULACIÓN SIN CORTES
+  # 1. SIMULACIÃ“N SIN CORTES
   # ===========================================================================
   
   cat("[PASO 1/4] Simulando crecimiento sin cortes...\n\n")
@@ -73,7 +73,7 @@ calcular_ica_sin_cortes <- function(arboles_inicial, config = CONFIG, años = 10
   # Simular año por año (solo procesos naturales)
   for (año in 1:años) {
     
-    cat(sprintf("  └─ Año %d/%d\n", año, años))
+    cat(sprintf("  â””â”€ AÃ±o %d/%d\n", año, años))
     
     # Crecimiento
     arboles_actual <- aplicar_crecimiento_poblacion(arboles_actual, config, año)
@@ -89,20 +89,23 @@ calcular_ica_sin_cortes <- function(arboles_inicial, config = CONFIG, años = 10
       mutate(año_simulacion = año)
   }
   
-  cat("\n✓ Simulación completada\n\n")
+  cat("\nâœ“ SimulaciÃ³n completada\n\n")
   
   # ===========================================================================
-  # 2. CALCULAR MÉTRICAS INICIALES Y FINALES
+  # 2. CALCULAR MÃ‰TRICAS INICIALES Y FINALES
   # ===========================================================================
   
   cat("[PASO 2/4] Calculando métricas por rodal, género y especie...\n\n")
   
-  # Métricas iniciales (año 0)
+  # MÃ©tricas iniciales (año 0)
   metricas_inicial <- calcular_metricas_detalladas(arboles_inicial, config)
   
-  # Métricas finales (año 10)
+  # MÃ©tricas finales (año 10)
   metricas_final <- calcular_metricas_detalladas(arboles_actual, config)
   
+  
+  # Calcular tiempo de paso
+  tiempo_paso <- calcular_tiempo_paso(metricas_inicial, metricas_final, años)
   # ===========================================================================
   # 3. CALCULAR VARIABLES DEL 11.1.4
   # ===========================================================================
@@ -144,7 +147,7 @@ calcular_ica_sin_cortes <- function(arboles_inicial, config = CONFIG, años = 10
     config
   )
   
-  cat("✓ Cálculos completados\n\n")
+  cat("âœ“ Cálculos completados\n\n")
   
   # ===========================================================================
   # 4. RETORNAR RESULTADOS
@@ -161,31 +164,35 @@ calcular_ica_sin_cortes <- function(arboles_inicial, config = CONFIG, años = 10
     ica_por_rodal = ica_por_rodal,
     ica_por_genero_rodal = ica_por_genero_rodal,
     ica_por_especie_rodal = ica_por_especie_rodal,
-    resumen_predio = resumen_predio
+    resumen_predio = resumen_predio,
+    
+    # Tiempo de paso
+    tiempo_paso_por_genero_rodal = tiempo_paso$por_genero_rodal,
+    tiempo_paso_por_rodal = tiempo_paso$por_rodal
   ))
 }
 
 # ==============================================================================
-# MÉTRICAS DETALLADAS POR RODAL, GÉNERO Y ESPECIE
+# MÃ‰TRICAS DETALLADAS POR RODAL, GÃ‰NERO Y ESPECIE
 # ==============================================================================
 
 calcular_metricas_detalladas <- function(arboles_df, config) {
-
-  # Usar funciones compartidas de utils_metricas.R (evita duplicación)
+  
+  # Usar funciones compartidas de utils_metricas.R (evita duplicaciÃ³n)
   por_rodal <- calcular_metricas_estado(arboles_df, config) %>%
     select(rodal, n_arboles = n_vivos, vol_muestreado_m3, vol_ha_m3,
            area_basal_m2 = ab_muestreada_m2, d_medio_cm, h_media_m)
-
+  
   por_genero <- calcular_metricas_por_genero(arboles_df, config) %>%
     select(rodal, genero_grupo, n_arboles = n_vivos, vol_muestreado_m3,
            vol_ha_m3, area_basal_m2 = ab_muestreada_m2)
-
+  
   # Por especie (filtrar solo Pinus y Quercus)
   por_especie <- calcular_metricas_por_especie(arboles_df, config) %>%
     filter(genero_grupo %in% c("Pinus", "Quercus")) %>%
     select(rodal, genero_grupo, nombre_cientifico, n_arboles = n_vivos,
            vol_muestreado_m3, vol_ha_m3, area_basal_m2 = ab_muestreada_m2)
-
+  
   return(list(
     por_rodal = por_rodal,
     por_genero = por_genero,
@@ -194,31 +201,154 @@ calcular_metricas_detalladas <- function(arboles_df, config) {
 }
 
 # ==============================================================================
-# VARIABLES 11.1.4 POR RODAL (UMM)
+# CALCULAR TIEMPO DE PASO (AÑOS PARA INCREMENTAR 5 CM)
+# ==============================================================================
+
+calcular_tiempo_paso <- function(metricas_inicial, metricas_final, años, 
+                                 delta_d_objetivo = 5) {
+  
+  cat("\n[CÁLCULO] Tiempo de paso por UMM y género...\n")
+  
+  # ============================================================================
+  # Función auxiliar: convertir área basal/ha y n_arboles/ha a diámetro medio
+  # ============================================================================
+  calcular_diametro_cuadratico <- function(area_basal_m2, n_arboles) {
+    # área basal ya es m²/ha, n_arboles es árboles/ha (implícito en las métricas)
+    # d_g = sqrt(AB/n × 40000/π)
+    # donde AB/n es el área basal promedio por árbol en m²
+    
+    ab_promedio_m2 <- ifelse(n_arboles > 0 & !is.na(n_arboles),
+                             area_basal_m2 / n_arboles,
+                             NA_real_)
+    d_cm <- sqrt(ab_promedio_m2 * 40000 / pi)
+    
+    return(d_cm)
+  }
+  
+  # ============================================================================
+  # TIEMPO DE PASO POR GÉNERO Y RODAL
+  # ============================================================================
+  
+  # Extraer datos iniciales
+  inicial_genero <- metricas_inicial$por_genero %>%
+    rename(genero = genero_grupo) %>%
+    mutate(
+      d_medio_ini_cm = calcular_diametro_cuadratico(area_basal_m2, n_arboles)
+    ) %>%
+    select(rodal, genero, n_arboles_ini = n_arboles, 
+           area_basal_ini_m2 = area_basal_m2, d_medio_ini_cm)
+  
+  # Extraer datos finales
+  final_genero <- metricas_final$por_genero %>%
+    rename(genero = genero_grupo) %>%
+    mutate(
+      d_medio_fin_cm = calcular_diametro_cuadratico(area_basal_m2, n_arboles)
+    ) %>%
+    select(rodal, genero, n_arboles_fin = n_arboles,
+           area_basal_fin_m2 = area_basal_m2, d_medio_fin_cm)
+  
+  # Combinar y calcular tiempo de paso
+  tiempo_paso_genero <- inicial_genero %>%
+    left_join(final_genero, by = c("rodal", "genero")) %>%
+    mutate(
+      # Incremento diamétrico observado en el período
+      delta_d_cm = d_medio_fin_cm - d_medio_ini_cm,
+      
+      # Incremento anual
+      incremento_anual_cm = delta_d_cm / años,
+      
+      # Tiempo de paso (años para incrementar 5 cm)
+      tiempo_paso_años = ifelse(incremento_anual_cm > 0,
+                                delta_d_objetivo / incremento_anual_cm,
+                                NA_real_)
+    ) %>%
+    select(rodal, genero, 
+           n_arboles_ini, n_arboles_fin,
+           d_medio_ini_cm, d_medio_fin_cm, 
+           delta_d_cm, incremento_anual_cm, tiempo_paso_años)
+  
+  # ============================================================================
+  # TIEMPO DE PASO POR RODAL (PROMEDIO PONDERADO DE GÉNEROS)
+  # ============================================================================
+  
+  tiempo_paso_rodal <- tiempo_paso_genero %>%
+    filter(!is.na(tiempo_paso_años), tiempo_paso_años > 0) %>%
+    group_by(rodal) %>%
+    summarise(
+      # Promedio ponderado por número de árboles inicial
+      tiempo_paso_promedio_años = weighted.mean(
+        tiempo_paso_años,
+        w = n_arboles_ini,
+        na.rm = TRUE
+      ),
+      # Incremento promedio ponderado
+      incremento_anual_promedio_cm = weighted.mean(
+        incremento_anual_cm,
+        w = n_arboles_ini,
+        na.rm = TRUE
+      ),
+      n_arboles_total_ini = sum(n_arboles_ini),
+      n_arboles_total_fin = sum(n_arboles_fin),
+      .groups = "drop"
+    )
+  
+  # Mostrar resumen
+  cat(sprintf("\n  ✓ Tiempo de paso calculado para %d UMM\n", 
+              nrow(tiempo_paso_rodal)))
+  cat(sprintf("  • Rango: %.1f - %.1f años\n",
+              min(tiempo_paso_rodal$tiempo_paso_promedio_años, na.rm = TRUE),
+              max(tiempo_paso_rodal$tiempo_paso_promedio_años, na.rm = TRUE)))
+  cat(sprintf("  • Media: %.1f años\n\n",
+              mean(tiempo_paso_rodal$tiempo_paso_promedio_años, na.rm = TRUE)))
+  
+  return(list(
+    por_genero_rodal = tiempo_paso_genero,
+    por_rodal = tiempo_paso_rodal
+  ))
+}
+
+# ==============================================================================
+# VARIABLES 11.1.4 POR RODAL (UMM) - CON SUPERFICIE_CORTA
 # ==============================================================================
 
 calcular_variables_114_rodal <- function(inicial, final, años, config, arboles_inicial) {
   
-  # La superficie ya está en arboles_inicial (viene de arboles_analisis.rds)
-  # Simplemente extraerla
+  # ============================================================================
+  # âœ… EXTRAER AMBAS SUPERFICIES: total y aprovechable
+  # ============================================================================
+  
   superficie_por_rodal <- arboles_inicial %>%
     group_by(rodal) %>%
     summarise(
-      superficie_ha = first(superficie_ha),
+      superficie_total_ha = first(superficie_total_ha),
+      superficie_corta_ha = first(superficie_corta_ha),  # âœ… Aprovechable
       .groups = "drop"
     )
   
-  # Verificar si hay NAs o valores inválidos
-  if (any(is.na(superficie_por_rodal$superficie_ha))) {
-    warning("⚠️ Algunos rodales tienen superficie NA. Usando promedio para esos casos.")
-    sup_promedio <- mean(superficie_por_rodal$superficie_ha, na.rm = TRUE)
+  # Verificar si hay NAs
+  if (any(is.na(superficie_por_rodal$superficie_total_ha))) {
+    warning("âš ï¸ Algunos rodales tienen superficie_total_ha NA")
+    sup_total_promedio <- mean(superficie_por_rodal$superficie_total_ha, na.rm = TRUE)
     superficie_por_rodal <- superficie_por_rodal %>%
-      mutate(superficie_ha = ifelse(is.na(superficie_ha), sup_promedio, superficie_ha))
+      mutate(superficie_total_ha = ifelse(is.na(superficie_total_ha), 
+                                          sup_total_promedio, 
+                                          superficie_total_ha))
   }
   
-  # Unir métricas inicial y final con superficies reales
+  if (any(is.na(superficie_por_rodal$superficie_corta_ha))) {
+    warning("âš ï¸ Algunos rodales tienen superficie_corta_ha NA. Usando superficie_total_ha.")
+    superficie_por_rodal <- superficie_por_rodal %>%
+      mutate(superficie_corta_ha = ifelse(is.na(superficie_corta_ha), 
+                                          superficie_total_ha, 
+                                          superficie_corta_ha))
+  }
+  
+  # ============================================================================
+  # CALCULAR ICA y VOLÃšMENES DE CORTA
+  # ============================================================================
+  
   comparacion <- inicial$por_rodal %>%
-    select(rodal, 
+    select(rodal,
            vol_muestreado_ini = vol_muestreado_m3,
            vol_ha_ini = vol_ha_m3,
            n_arboles_ini = n_arboles) %>%
@@ -232,62 +362,63 @@ calcular_variables_114_rodal <- function(inicial, final, años, config, arboles_
     ) %>%
     left_join(superficie_por_rodal, by = "rodal") %>%
     mutate(
-      # Existencias Reales (ER) al inicio en m³/ha (ya calculado correctamente)
+      # Existencias reales (mÂ³/ha)
       ER_m3_ha = vol_ha_ini,
       
-      # Volumen final en m³/ha (ya calculado correctamente)
-      vol_fin_m3_ha = vol_ha_fin,
-      
-      # ICA en m³/ha (incremento anual)
-      ICA_m3_ha = (vol_fin_m3_ha - ER_m3_ha) / años,
-      
-      # ICA Relativo (i) = ICA/ER
+      # ICA (mÂ³/ha/año)
+      ICA_m3_ha = (vol_ha_fin - ER_m3_ha) / años,
       ICA_rel_i = ifelse(ER_m3_ha > 0, ICA_m3_ha / ER_m3_ha, 0),
       
       # Ciclo de corta
       ciclo_corta = config$periodo,
       
-      # Intensidad de corta relativa (IC): fórmula interés compuesto
-      # IC = 1 - 1/(1+i)^cc
-      IntCor_rel_IC = ifelse(ICA_rel_i > -1, 
-                             1 - 1/((1 + ICA_rel_i)^ciclo_corta),
+      # Intensidad de corta relativa
+      IntCor_rel_IC = ifelse(ICA_rel_i > 0, 
+                             1 - 1/(1 + ICA_rel_i)^ciclo_corta, 
                              0),
       
-      # Volumen de corta por hectárea: VC = IC * ER
-      VC_ha_m3 = IntCor_rel_IC * ER_m3_ha,
+      # âœ… VOLUMEN DE CORTA: usar superficie_corta_ha (NO total)
+      VC_ha_m3 = IntCor_rel_IC * ER_m3_ha,  # mÂ³/ha
+      VC_rodal_m3 = VC_ha_m3 * superficie_corta_ha,  # âœ… Escalar por sup. aprovechable
       
-      # Existencias reales por rodal (usar superficie_ha que viene de la tabla)
-      ER_rodal_m3 = ER_m3_ha * superficie_ha,
-      
-      # Volumen de corta por rodal
-      VC_rodal_m3 = VC_ha_m3 * superficie_ha
+      # Existencias reales totales (para referencia)
+      ER_rodal_total_m3 = ER_m3_ha * superficie_total_ha,  # Volumen total del rodal
+      ER_rodal_aprovechable_m3 = ER_m3_ha * superficie_corta_ha  # Vol. en zona aprovechable
     ) %>%
-    select(rodal, Sup_ha = superficie_ha, ER_m3_ha, ICA_m3_ha, ICA_rel_i, 
+    select(rodal, 
+           Sup_ha = superficie_corta_ha,
+           superficie_total_ha,
+           ER_m3_ha, ICA_m3_ha, ICA_rel_i, 
            ciclo_corta, IntCor_rel_IC, VC_ha_m3, 
-           ER_rodal_m3, VC_rodal_m3)
+           ER_rodal_m3 = ER_rodal_aprovechable_m3,
+           ER_rodal_total_m3, 
+           VC_rodal_m3)
   
   return(comparacion)
 }
 
 # ==============================================================================
-# VARIABLES 11.1.4 POR GÉNERO Y RODAL
+# VARIABLES 11.1.4 POR GÃ‰NERO Y RODAL
 # ==============================================================================
 
 calcular_variables_114_genero_rodal <- function(inicial, final, años, config, arboles_inicial) {
   
-  # La superficie ya está en arboles_inicial
+  # âœ… Extraer superficie APROVECHABLE (corta_ha), no total
   superficie_por_rodal <- arboles_inicial %>%
     group_by(rodal) %>%
     summarise(
-      superficie_ha = first(superficie_ha),
+      superficie_corta_ha = first(superficie_corta_ha),
+      superficie_total_ha = first(superficie_total_ha),  # Para referencia
       .groups = "drop"
     )
   
-  # Verificar NAs
-  if (any(is.na(superficie_por_rodal$superficie_ha))) {
-    sup_promedio <- mean(superficie_por_rodal$superficie_ha, na.rm = TRUE)
+  # Verificar NAs y usar fallback
+  if (any(is.na(superficie_por_rodal$superficie_corta_ha))) {
+    warning("âš ï¸ Algunos rodales tienen superficie_corta_ha NA. Usando superficie_total_ha.")
     superficie_por_rodal <- superficie_por_rodal %>%
-      mutate(superficie_ha = ifelse(is.na(superficie_ha), sup_promedio, superficie_ha))
+      mutate(superficie_corta_ha = ifelse(is.na(superficie_corta_ha), 
+                                          superficie_total_ha, 
+                                          superficie_corta_ha))
   }
   
   comparacion <- inicial$por_genero %>%
@@ -305,7 +436,7 @@ calcular_variables_114_genero_rodal <- function(inicial, final, años, config, a
     ) %>%
     left_join(superficie_por_rodal, by = "rodal") %>%
     mutate(
-      # ER y volumen final ya están calculados correctamente como m³/ha
+      # ER y volumen final ya estÃ¡n calculados correctamente como mÂ³/ha
       ER_m3_ha = vol_ha_ini,
       vol_fin_m3_ha = vol_ha_fin,
       ICA_m3_ha = (vol_fin_m3_ha - ER_m3_ha) / años,
@@ -315,10 +446,14 @@ calcular_variables_114_genero_rodal <- function(inicial, final, años, config, a
                              1 - 1/((1 + ICA_rel_i)^ciclo_corta),
                              0),
       VC_ha_m3 = IntCor_rel_IC * ER_m3_ha,
-      ER_rodal_m3 = ER_m3_ha * superficie_ha,
-      VC_rodal_m3 = VC_ha_m3 * superficie_ha
+      # âœ… Usar superficie aprovechable para volúmenes totales
+      ER_rodal_m3 = ER_m3_ha * superficie_corta_ha,
+      VC_rodal_m3 = VC_ha_m3 * superficie_corta_ha
     ) %>%
-    select(rodal, genero, Sup_ha = superficie_ha, ER_m3_ha, ICA_m3_ha, ICA_rel_i,
+    select(rodal, genero, 
+           Sup_ha = superficie_corta_ha,  # âœ… Devolver superficie aprovechable
+           superficie_total_ha,            # Mantener para referencia
+           ER_m3_ha, ICA_m3_ha, ICA_rel_i,
            ciclo_corta, IntCor_rel_IC, VC_ha_m3,
            ER_rodal_m3, VC_rodal_m3)
   
@@ -340,32 +475,38 @@ calcular_variables_114_especie_rodal <- function(arboles_inicial, arboles_final,
   final_especies <- metricas_final$por_especie %>%
     rename(genero = genero_grupo, especie = nombre_cientifico)
   
-  # Obtener superficie REAL por rodal
-  tiene_superficie <- "superficie_ha" %in% names(arboles_inicial)
+  # âœ… Extraer superficie APROVECHABLE, no total
+  tiene_superficie <- "superficie_corta_ha" %in% names(arboles_inicial)
   
   if (tiene_superficie) {
     superficie_por_rodal <- arboles_inicial %>%
       group_by(rodal) %>%
       summarise(
-        superficie_ha = first(na.omit(superficie_ha)),
+        superficie_corta_ha = first(na.omit(superficie_corta_ha)),
+        superficie_total_ha = first(na.omit(superficie_total_ha)),
         .groups = "drop"
       )
     
-    if (all(is.na(superficie_por_rodal$superficie_ha)) || 
+    if (all(is.na(superficie_por_rodal$superficie_corta_ha)) || 
         nrow(superficie_por_rodal) == 0 ||
-        any(superficie_por_rodal$superficie_ha <= 0, na.rm = TRUE)) {
-      tiene_superficie <- FALSE
+        any(superficie_por_rodal$superficie_corta_ha <= 0, na.rm = TRUE)) {
+      # Fallback a superficie total si corta_ha no estÃ¡ disponible
+      warning("âš ï¸ superficie_corta_ha no disponible. Usando superficie_total_ha.")
+      superficie_por_rodal <- superficie_por_rodal %>%
+        mutate(superficie_corta_ha = superficie_total_ha)
+      tiene_superficie <- !all(is.na(superficie_por_rodal$superficie_corta_ha))
     }
   }
   
-  # Fallback si no hay datos
+  # Fallback si no hay datos de superficie
   if (!tiene_superficie) {
-    warning("⚠️ No se encontraron superficies por rodal. Usando distribución equitativa.")
+    warning("âš ï¸ No se encontraron superficies por rodal. Usando distribución equitativa.")
     superficie_total_ha <- 100
     n_rodales <- n_distinct(inicial_especies$rodal)
     superficie_por_rodal <- tibble(
       rodal = unique(inicial_especies$rodal),
-      superficie_ha = superficie_total_ha / n_rodales
+      superficie_corta_ha = superficie_total_ha / n_rodales,
+      superficie_total_ha = superficie_total_ha / n_rodales
     )
   }
   
@@ -375,10 +516,11 @@ calcular_variables_114_especie_rodal <- function(arboles_inicial, arboles_final,
     anti_join(superficie_por_rodal, by = "rodal")
   
   if (nrow(rodales_sin_superficie) > 0) {
-    sup_promedio <- mean(superficie_por_rodal$superficie_ha, na.rm = TRUE)
+    sup_promedio <- mean(superficie_por_rodal$superficie_corta_ha, na.rm = TRUE)
     superficie_faltante <- tibble(
       rodal = rodales_sin_superficie$rodal,
-      superficie_ha = sup_promedio
+      superficie_corta_ha = sup_promedio,
+      superficie_total_ha = sup_promedio
     )
     superficie_por_rodal <- bind_rows(superficie_por_rodal, superficie_faltante)
   }
@@ -396,7 +538,7 @@ calcular_variables_114_especie_rodal <- function(arboles_inicial, arboles_final,
     ) %>%
     left_join(superficie_por_rodal, by = "rodal") %>%
     mutate(
-      # ER y volumen final ya están calculados correctamente como m³/ha
+      # ER y volumen final ya estÃ¡n calculados correctamente como mÂ³/ha
       ER_m3_ha = vol_ha_ini,
       vol_fin_m3_ha = vol_ha_fin,
       ICA_m3_ha = (vol_fin_m3_ha - ER_m3_ha) / años,
@@ -406,16 +548,19 @@ calcular_variables_114_especie_rodal <- function(arboles_inicial, arboles_final,
                              1 - 1/((1 + ICA_rel_i)^ciclo_corta),
                              0),
       VC_ha_m3 = IntCor_rel_IC * ER_m3_ha,
-      ER_rodal_m3 = ER_m3_ha * superficie_ha,
-      VC_rodal_m3 = VC_ha_m3 * superficie_ha
+      # âœ… Usar superficie aprovechable para volúmenes totales
+      ER_rodal_m3 = ER_m3_ha * superficie_corta_ha,
+      VC_rodal_m3 = VC_ha_m3 * superficie_corta_ha
     ) %>%
-    select(rodal, genero, especie, Sup_ha = superficie_ha, ER_m3_ha, ICA_m3_ha, ICA_rel_i,
+    select(rodal, genero, especie, 
+           Sup_ha = superficie_corta_ha,  # âœ… Devolver superficie aprovechable
+           superficie_total_ha,            # Mantener para referencia
+           ER_m3_ha, ICA_m3_ha, ICA_rel_i,
            ciclo_corta, IntCor_rel_IC, VC_ha_m3,
            ER_rodal_m3, VC_rodal_m3)
   
   return(comparacion)
 }
-
 # ==============================================================================
 # RESUMEN GENERAL DEL PREDIO
 # ==============================================================================
@@ -433,21 +578,21 @@ calcular_resumen_predio <- function(ica_por_rodal, años, config) {
       .groups = "drop"
     )
   
-  cat("\n╔════════════════════════════════════════════════════════════╗\n")
-  cat("║            RESUMEN GENERAL DEL PREDIO                     ║\n")
-  cat("╚════════════════════════════════════════════════════════════╝\n\n")
+  cat("\nâ•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—\n")
+  cat("â•‘            RESUMEN GENERAL DEL PREDIO                     â•‘\n")
+  cat("â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•\n\n")
   
   cat(sprintf("Superficie de la UM:                  %.3f hectáreas\n", 
               resumen$superficie_total_ha))
-  cat(sprintf("Existencias reales en la UM:          %.3f m³\n", 
+  cat(sprintf("Existencias reales en la UM:          %.3f mÂ³\n", 
               resumen$ER_total_m3))
   cat(sprintf("Ciclo de corta:                       %d años\n", 
               resumen$ciclo_corta))
-  cat(sprintf("Vol. de corta durante el ciclo:       %.3f m³\n", 
+  cat(sprintf("Vol. de corta durante el ciclo:       %.3f mÂ³\n", 
               resumen$VC_total_ciclo_m3))
-  cat(sprintf("Posibilidad anual:                    %.3f m³\n", 
+  cat(sprintf("Posibilidad anual:                    %.3f mÂ³\n", 
               resumen$VC_anual_m3))
-  cat(sprintf("Área de corta anual:                  %.3f ha\n\n", 
+  cat(sprintf("Ãrea de corta anual:                  %.3f ha\n\n", 
               resumen$area_corta_anual_ha))
   
   return(resumen)
@@ -474,7 +619,7 @@ exportar_tablas_latex_ica <- function(resultados_ica, directorio = "tablas_latex
     mutate(across(where(is.numeric), ~round(., 3)))
   
   xtab1 <- xtable(tabla1,
-                  caption = "Variables de manejo forestal por Rodal (UMM) según sección 11.1.4 del Manual PMF",
+                  caption = "Variables de manejo forestal por Rodal (UMM) según secciÃ³n 11.1.4 del Manual PMF",
                   label = "tab:ica_rodal",
                   digits = 3)
   
@@ -485,10 +630,10 @@ exportar_tablas_latex_ica <- function(resultados_ica, directorio = "tablas_latex
         booktabs = TRUE,
         sanitize.text.function = identity)
   
-  cat(sprintf("  ✓ %s\n", "31_ica_por_rodal.tex"))
+  cat(sprintf("  âœ“ %s\n", "31_ica_por_rodal.tex"))
   
   # --------------------------------------------------
-  # TABLA 2: ICA POR GÉNERO Y RODAL
+  # TABLA 2: ICA POR GÃ‰NERO Y RODAL
   # --------------------------------------------------
   
   tabla2 <- resultados_ica$ica_por_genero_rodal %>%
@@ -506,7 +651,7 @@ exportar_tablas_latex_ica <- function(resultados_ica, directorio = "tablas_latex
         booktabs = TRUE,
         sanitize.text.function = identity)
   
-  cat(sprintf("  ✓ %s\n", "31_ica_por_genero_rodal.tex"))
+  cat(sprintf("  âœ“ %s\n", "31_ica_por_genero_rodal.tex"))
   
   # --------------------------------------------------
   # TABLA 3: ICA POR ESPECIE Y RODAL (PINUS/QUERCUS)
@@ -527,7 +672,7 @@ exportar_tablas_latex_ica <- function(resultados_ica, directorio = "tablas_latex
         booktabs = TRUE,
         sanitize.text.function = identity)
   
-  cat(sprintf("  ✓ %s\n", "31_ica_por_especie_rodal.tex"))
+  cat(sprintf("  âœ“ %s\n", "31_ica_por_especie_rodal.tex"))
   
   # --------------------------------------------------
   # TABLA 4: RESUMEN PREDIO
@@ -549,9 +694,54 @@ exportar_tablas_latex_ica <- function(resultados_ica, directorio = "tablas_latex
         booktabs = TRUE,
         sanitize.text.function = identity)
   
-  cat(sprintf("  ✓ %s\n", "31_resumen_predio.tex"))
+  cat(sprintf("  âœ“ %s\n", "31_resumen_predio.tex"))
   
-  cat("\n✓ Tablas LaTeX exportadas exitosamente\n\n")
+  # --------------------------------------------------
+  # TABLA 5: TIEMPO DE PASO POR RODAL
+  # --------------------------------------------------
+  
+  if (!is.null(resultados_ica$tiempo_paso_por_rodal)) {
+    tabla5 <- resultados_ica$tiempo_paso_por_rodal %>%
+      mutate(across(where(is.numeric), ~round(., 3)))
+    
+    xtab5 <- xtable(tabla5,
+                    caption = "Tiempo de paso (años para incrementar 5 cm) por Rodal (UMM)",
+                    label = "tab:tiempo_paso_rodal",
+                    digits = 3)
+    
+    print(xtab5,
+          file = file.path(directorio, "31_tiempo_paso_rodal.tex"),
+          include.rownames = FALSE,
+          caption.placement = "top",
+          booktabs = TRUE,
+          sanitize.text.function = identity)
+    
+    cat(sprintf("  ✓ %s\n", "31_tiempo_paso_rodal.tex"))
+  }
+  
+  # --------------------------------------------------
+  # TABLA 6: TIEMPO DE PASO POR GÉNERO Y RODAL
+  # --------------------------------------------------
+  
+  if (!is.null(resultados_ica$tiempo_paso_por_genero_rodal)) {
+    tabla6 <- resultados_ica$tiempo_paso_por_genero_rodal %>%
+      mutate(across(where(is.numeric), ~round(., 3)))
+    
+    xtab6 <- xtable(tabla6,
+                    caption = "Tiempo de paso (años para incrementar 5 cm) por Género y Rodal",
+                    label = "tab:tiempo_paso_genero_rodal",
+                    digits = 3)
+    
+    print(xtab6,
+          file = file.path(directorio, "31_tiempo_paso_genero_rodal.tex"),
+          include.rownames = FALSE,
+          caption.placement = "top",
+          booktabs = TRUE,
+          sanitize.text.function = identity)
+    
+    cat(sprintf("  ✓ %s\n", "31_tiempo_paso_genero_rodal.tex"))
+  }
+  cat("\nâœ“ Tablas LaTeX exportadas exitosamente\n\n")
 }
 
 # ==============================================================================
@@ -584,24 +774,46 @@ guardar_resultados_ica <- function(resultados_ica, directorio = "resultados") {
             file.path(directorio, "31_resumen_predio.csv"),
             row.names = FALSE)
   
+  # Guardar tiempo de paso si está disponible
+  if (!is.null(resultados_ica$tiempo_paso_por_rodal)) {
+    write.csv(resultados_ica$tiempo_paso_por_rodal,
+              file.path(directorio, "31_tiempo_paso_rodal.csv"),
+              row.names = FALSE)
+  }
+  
+  if (!is.null(resultados_ica$tiempo_paso_por_genero_rodal)) {
+    write.csv(resultados_ica$tiempo_paso_por_genero_rodal,
+              file.path(directorio, "31_tiempo_paso_genero_rodal.csv"),
+              row.names = FALSE)
+  }
+  
   cat("\n✓ Resultados guardados en directorio resultados/\n")
   cat("  • 31_resultados_ica.rds (objeto completo)\n")
   cat("  • 31_ica_por_rodal.csv\n")
   cat("  • 31_ica_por_genero_rodal.csv\n")
   cat("  • 31_ica_por_especie_rodal.csv\n")
-  cat("  • 31_resumen_predio.csv\n\n")
+  cat("  • 31_resumen_predio.csv\n")
+  if (!is.null(resultados_ica$tiempo_paso_por_rodal)) {
+    cat("  • 31_tiempo_paso_rodal.csv\n")
+    cat("  • 31_tiempo_paso_genero_rodal.csv\n")
+  }
+  cat("\n")
 }
 
 # ==============================================================================
 # MENSAJE DE CARGA
 # ==============================================================================
 
+
 cat("\n✓ Módulo de cálculo de ICA cargado (sin cortes)\n")
 cat("══════════════════════════════════════════════════════════════\n")
 cat("Funciones disponibles:\n")
 cat("  • calcular_ica_sin_cortes(arboles, config, años=10)\n")
+cat("  • calcular_tiempo_paso(metricas_inicial, metricas_final, años)\n")
 cat("  • exportar_tablas_latex_ica(resultados)\n")
 cat("  • guardar_resultados_ica(resultados)\n\n")
-cat("Este módulo calcula ICA derivado del modelo poblacional,\n")
-cat("más preciso que la fórmula tradicional de interés compuesto.\n")
+cat("Este módulo calcula:\n")
+cat("  - ICA derivado del modelo poblacional\n")
+cat("  - Tiempo de paso (años para incrementar 5 cm de diámetro)\n")
+cat("  - Variables requeridas por NOM-152 (sección 11.1.4)\n")
 cat("══════════════════════════════════════════════════════════════\n\n")

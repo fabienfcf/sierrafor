@@ -1,5 +1,5 @@
 # ==============================================================================
-# 05_CONFIG_PROGRAMA_CORTAS.R - CORREGIDO
+# 05_CONFIG_PROGRAMA_CORTAS.R - CON N_REF ARBITRARIO POR UMM
 # ==============================================================================
 
 library(tidyverse)
@@ -11,130 +11,144 @@ cat("\n[4/4] Cargando programa de cortas...\n")
 # ==============================================================================
 
 DMC <- list(
-  "Pinus" = 30,
-  "Quercus" = 25
+  "Pinus" = 20,
+  "Quercus" = 2
 )
 
 # ==============================================================================
-# 2. PARÁMETROS DEL MÉTODO LIOCOURT
+# 2. DIÁMETROS DE MADUREZ por género (para cosecha prioritaria)
 # ==============================================================================
 
-Q_FACTOR <- 1.7
+D_MADUREZ <- list(
+  "Pinus" = 55,
+  "Quercus" = 45
+)
+
+# ==============================================================================
+# 3. PARÁMETROS LIOCOURT
+# ==============================================================================
+
+Q_FACTOR <- 1.5
 TOLERANCIA_EQUILIBRIO <- 20
+CLASE_REFERENCIA_LIOCOURT <- 40  # cm (centro de clase 40-45)
 
 # ==============================================================================
-# 3. PROGRAMA DE CORTAS - ✅ CON COLUMNA excluir_semilleros
+# 4. DENSIDAD REFERENCIA LIOCOURT POR UMM (ARBITRARIA)
+# ==============================================================================
+#
+# N_REF_LIOCOURT: Densidad objetivo en la clase de referencia (40-45 cm)
+# Unidad: árboles/ha (Pinus + Quercus combinados)
+#
+# DEFINICIÓN ARBITRARIA POR UMM:
+#   - UMM productivas con alta densidad: 10-15 árb/ha
+#   - UMM promedio: 8-12 árb/ha
+#   - UMM degradadas o baja densidad: 5-8 árb/ha
+#
+# IMPORTANTE: Este valor define la CURVA IDEAL hacia la cual se dirige
+# el manejo forestal, NO la densidad actual observada en campo.
+#
+# ==============================================================================
+
+N_REF_LIOCOURT_POR_UMM <- tribble(
+  ~rodal, ~n_ref_arboles_ha,
+  #-------|-------------------
+  1,      10,   # UMM 1: alta densidad objetivo
+  2,      10,   # UMM 2: densidad media-alta
+  3,      10,    # UMM 3: densidad media
+  4,      10,   # UMM 4: densidad media-alta
+  5,      10,    # UMM 5: densidad media
+  6,      10    # UMM 6: densidad alta
+)
+
+# ==============================================================================
+# 5. PROGRAMA DE CORTAS
+# ==============================================================================
+#
+# COLUMNAS:
+#   rodal: Número de rodal (UMM)
+#   ano_corta: Año del ciclo para intervención (1-10)
+#   metodo: "ICA" (único método implementado)
+#   intensidad_pct: % del ICA a cortar (típicamente 50-80%)
+#   proteger_maduros_pinus: TRUE = NO cortar Pinus maduros (>= D_MADUREZ)
+#   proteger_maduros_quercus: TRUE = NO cortar Quercus maduros (>= D_MADUREZ)
+#   proporcion_quercus: Proporción objetivo de Quercus en volumen cortado
+#                       (0.60 = 60% Quercus, 40% Pinus)
+#                       NULL = sin control de proporción
+#
+# LÓGICA:
+#   1. Calcular vol_objetivo = ICA × 10 años × intensidad_pct
+#   2. Cortar árboles maduros primero (si no protegidos)
+#   3. Luego cortar según Liocourt (distance à courbe idéale)
+#      → Curva Liocourt usa N_REF_LIOCOURT_POR_UMM[rodal]
+#   4. Si proporcion_quercus definida: roll dice para auto-regular
+#
 # ==============================================================================
 
 PROGRAMA_CORTAS <- tribble(
-  ~rodal, ~año_corta, ~metodo, ~intensidad_pct, ~d_min, ~d_max, ~prioridad, ~excluir_semilleros,
-  #-------|-----------|---------|----------------|--------|--------|------------|--------------------
-  1,      1,          "ICA",   80,               NULL,   NULL,   "suprimidos", TRUE,
-  2,      3,          "ICA",   80,               NULL,   NULL,   "suprimidos", TRUE,
-  3,      5,          "ICA",   80,               NULL,   NULL,   "suprimidos", TRUE,
-  4,      7,          "ICA",   80,               NULL,   NULL,   "suprimidos", TRUE,
-  5,      9,          "ICA",   80,               NULL,   NULL,   "suprimidos", TRUE,
-  6,      10,          "ICA",   80,               NULL,   NULL,   "suprimidos", TRUE
-  )
+  ~rodal, ~ano_corta, ~metodo, ~intensidad_pct, ~proteger_maduros_pinus, ~proteger_maduros_quercus, ~proporcion_quercus,
+  #-------|-----------|---------|----------------|-------------------------|---------------------------|---------------------
+  1,      1,          "ICA",   70,               TRUE,                    FALSE,                     1,
+  2,      3,          "ICA",   50,               TRUE,                    FALSE,                     1,
+  3,      5,          "ICA",   80,               TRUE,                    FALSE,                     0.50,
+  4,      7,          "ICA",   70,               TRUE,                    FALSE,                     0.90,
+  5,      9,          "ICA",   70,               TRUE,                    FALSE,                     0.90,
+  6,      10,         "ICA",   65,               TRUE,                    FALSE,                     0.90
+)
 
 # ==============================================================================
-# 4. FUNCIÓN HELPER
+# 6. FUNCIÓN HELPER PARA OBTENER N_REF POR UMM
+# ==============================================================================
+
+#' @title Obtener N_REF Liocourt para un rodal
+#' @param rodal Número de UMM
+#' @return Densidad objetivo en clase referencia (árb/ha)
+obtener_n_ref_liocourt <- function(rodal) {
+  n_ref <- N_REF_LIOCOURT_POR_UMM %>%
+    filter(rodal == !!rodal) %>%
+    pull(n_ref_arboles_ha)
+  
+  if (length(n_ref) == 0) {
+    warning(sprintf("⚠️ N_REF no definido para UMM %d, usando 10 árb/ha por defecto", rodal))
+    return(10)
+  }
+  
+  return(n_ref)
+}
+
+# ==============================================================================
+# 7. FUNCIÓN HELPER PARA CONFIGURAR CORTE
 # ==============================================================================
 
 configurar_corte <- function(metodo = "ICA",
-                             intensidad_pct = 80,
-                             d_min = NULL,
-                             d_max = NULL,
-                             prioridad = "suprimidos",
-                             excluir_semilleros = TRUE,
+                             intensidad_pct = 50,
+                             proteger_maduros_pinus = TRUE,
+                             proteger_maduros_quercus = FALSE,
+                             proporcion_quercus = 0.90,
                              q_factor = Q_FACTOR,
-                             tolerancia_equilibrio = TOLERANCIA_EQUILIBRIO,
-                             años_ica = 10) {
+                             tolerancia = TOLERANCIA_EQUILIBRIO) {
   
-  if (!metodo %in% c("ICA", "EXISTENCIAS", "LIOCOURT")) {
-    stop(sprintf("Método '%s' no válido. Usa: ICA o EXISTENCIAS", metodo))
+  if (metodo != "ICA") {
+    stop("❌ Solo método 'ICA' está implementado")
   }
   
-  if (intensidad_pct <= 0 || intensidad_pct > 100) {
-    stop("intensidad_pct debe estar entre 0 y 100")
-  }
-  
-  if (!prioridad %in% c("suprimidos", "dominantes", "intermedios")) {
-    stop("prioridad debe ser: suprimidos, dominantes, o intermedios")
-  }
-  
-  config <- list(
+  list(
     metodo = metodo,
     intensidad_pct = intensidad_pct,
-    d_min = d_min,
-    d_max = d_max,
-    prioridad = prioridad,
-    excluir_semilleros = excluir_semilleros,
-    años_ica = años_ica,
+    proteger_maduros_pinus = proteger_maduros_pinus,
+    proteger_maduros_quercus = proteger_maduros_quercus,
+    proporcion_quercus = proporcion_quercus,
     q_factor = q_factor,
-    tolerancia = tolerancia_equilibrio
+    tolerancia = tolerancia
   )
-  
-  return(config)
 }
 
 # ==============================================================================
-# 5. VALIDACIÓN
+# VALIDACIÓN
 # ==============================================================================
 
-validar_programa_cortas <- function(programa, config = CONFIG) {
-  
-  cat("\n[VALIDACIÓN PROGRAMA DE CORTAS]\n")
-  cat("═══════════════════════════════════════════════════════════\n")
-  
-  errores <- c()
-  
-  # Verificar columnas requeridas
-  cols_requeridas <- c("rodal", "año_corta", "metodo", "intensidad_pct", 
-                       "prioridad", "excluir_semilleros")
-  cols_faltantes <- setdiff(cols_requeridas, names(programa))
-  
-  if (length(cols_faltantes) > 0) {
-    errores <- c(errores, sprintf("Columnas faltantes: %s", 
-                                  paste(cols_faltantes, collapse=", ")))
-  }
-  
-  # Verificar métodos válidos
-  metodos_invalidos <- setdiff(unique(programa$metodo), 
-                               c("ICA", "EXISTENCIAS", "LIOCOURT"))
-  if (length(metodos_invalidos) > 0) {
-    errores <- c(errores, sprintf("Métodos inválidos: %s", 
-                                  paste(metodos_invalidos, collapse=", ")))
-  }
-  
-  # Verificar intensidades
-  if (any(programa$intensidad_pct <= 0 | programa$intensidad_pct > 100)) {
-    errores <- c(errores, "Intensidades deben estar entre 0 y 100")
-  }
-  
-  if (length(errores) > 0) {
-    cat("\n❌ ERRORES:\n")
-    for (e in errores) cat(sprintf("  • %s\n", e))
-    stop("Programa de cortas inválido")
-  }
-  
-  cat("\n✓ Validación exitosa\n")
-  cat(sprintf("  Rodales programados: %d\n", length(unique(programa$rodal))))
-  cat(sprintf("  Años con cortas: %s\n\n", 
-              paste(sort(unique(programa$año_corta)), collapse=", ")))
-  
-  return(TRUE)
-}
-
-# ==============================================================================
-# RESUMEN
-# ==============================================================================
-
-cat(sprintf("  ✓ DMC definido para %d géneros\n", length(DMC)))
-for (g in names(DMC)) {
-  cat(sprintf("    • %s: %d cm\n", g, DMC[[g]]))
-}
-cat(sprintf("  ✓ Q_FACTOR: %.1f\n", Q_FACTOR))
-cat(sprintf("  ✓ Tolerancia: ±%d%%\n", TOLERANCIA_EQUILIBRIO))
-cat(sprintf("  ✓ Rodales programados: %d\n", nrow(PROGRAMA_CORTAS)))
-cat(sprintf("  ✓ Columnas: %s\n\n", paste(names(PROGRAMA_CORTAS), collapse=", ")))
+cat("  ✓ DMC: Pinus =", DMC$Pinus, "cm, Quercus =", DMC$Quercus, "cm\n")
+cat("  ✓ D_MADUREZ: Pinus =", D_MADUREZ$Pinus, "cm, Quercus =", D_MADUREZ$Quercus, "cm\n")
+cat("  ✓ Q-factor:", Q_FACTOR, "\n")
+cat("  ✓ Clase referencia:", CLASE_REFERENCIA_LIOCOURT, "cm\n")
+cat("  ✓ N_REF arbitrario definido para", nrow(N_REF_LIOCOURT_POR_UMM), "UMM\n")
+cat("  ✓ Programa de cortas:", nrow(PROGRAMA_CORTAS), "intervenciones\n\n")

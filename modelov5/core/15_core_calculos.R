@@ -246,7 +246,7 @@ calcular_altura_lorey <- function(alturas, areas_basales) {
 #' - area_total = 0.1 × 3 = 0.3 ha
 #' - factor = calcular_factor_expansion(0.3) = 3.33
 #' 
-calcular_factor_expansion <- function(area_parcela_ha = 0.05) {
+calcular_factor_expansion <- function(area_parcela_ha = CONFIG$area_parcela_ha) {
   1 / area_parcela_ha
 }
 

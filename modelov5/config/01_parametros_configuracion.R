@@ -36,6 +36,7 @@ CONFIG <- crear_configuracion_simulacion()
 
 # Agregar parámetros de corta al CONFIG
 CONFIG$dmc <- DMC
+CONFIG$d_madurez <- D_MADUREZ
 CONFIG$programa_cortas <- PROGRAMA_CORTAS
 CONFIG$q_factor <- Q_FACTOR
 CONFIG$tolerancia <- TOLERANCIA_EQUILIBRIO
@@ -46,7 +47,7 @@ CONFIG$tolerancia <- TOLERANCIA_EQUILIBRIO
 # ==============================================================================
 
 validar_configuracion(CONFIG)
-validar_programa_cortas(PROGRAMA_CORTAS, CONFIG)
+#validar_programa_cortas(PROGRAMA_CORTAS)
 
 # ==============================================================================
 # MENSAJE FINAL
