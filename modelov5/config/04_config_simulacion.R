@@ -40,14 +40,14 @@ SEMILLA_MORTALIDAD <- 42  # Para reproducibilidad
 # 4. RECLUTAMIENTO
 # ==============================================================================
 
-TASA_RECLUTAMIENTO <- 0.01  # 2% de la densidad actual por año
+TASA_RECLUTAMIENTO <- 0.01  # 1% de la densidad actual por año
 
 # Rango de clases de ingreso (diámetro en cm)
 RECLUTAMIENTO_D_MIN <- 7.5
 RECLUTAMIENTO_D_MAX <- 8.5
 
 # Dominancia inicial de nuevos árboles
-RECLUTAMIENTO_DOMINANCIA <- 3  # Suprimidos (código 6)
+RECLUTAMIENTO_DOMINANCIA <- 3  # Suprimido (código 3)
 
 # Altura inicial aproximada (m) por género
 RECLUTAMIENTO_ALTURA <- list(
@@ -94,7 +94,6 @@ crear_configuracion_simulacion <- function() {
     # ══════════════════════════════════════════════════════════════
     especies = ESPECIES,
     ecuaciones_volumen = ECUACIONES_VOLUMEN,
-    #parametros_altura = PARAMETROS_ALTURA_DIAMETRO,
     generos = GENEROS_OBJETIVO,
     crecimiento_base = setNames(
       CRECIMIENTO_DIAMETRICO$tasa_base_cm_año,
@@ -130,29 +129,7 @@ crear_configuracion_simulacion <- function() {
     # MUESTREO
     # ══════════════════════════════════════════════════════════════
     area_parcela_ha = AREA_PARCELA_HA,
-    area_parcela_regeneracion_ha = AREA_REGENERACION_M2/10000 #,
-    
-    # ══════════════════════════════════════════════════════════════
-    # FUNCIÓN DE CÁLCULO DE dh/dd
-    # ══════════════════════════════════════════════════════════════
-#     interpolar_dhdd = function(especie, diametro, dominancia) {
-#       params <- obtener_parametros_altura(especie, dominancia)
-#       
-#       if (is.null(params)) {
-#         warning(sprintf("No se encontraron parámetros para '%s', usando 0.15 m/cm", especie))
-#         return(0.15)
-#       }
-#       
-#       dhdd <- calcular_dhdd_chapman_richards(diametro, params$a, params$b, params$c)
-#       
-#       if (is.na(dhdd) || dhdd <= 0) {
-#         warning(sprintf("Cálculo dh/dd falló para '%s' d=%.1f dom=%d, usando 0.15 m/cm",
-#                         especie, diametro, dominancia))
-#         return(0.15)
-#       }
-#       
-#       return(dhdd)
-#     }
+    area_parcela_regeneracion_ha = AREA_REGENERACION_M2/10000
    )
    
    return(config)

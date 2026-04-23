@@ -47,7 +47,6 @@ CONFIG$tolerancia <- TOLERANCIA_EQUILIBRIO
 # ==============================================================================
 
 validar_configuracion(CONFIG)
-#validar_programa_cortas(PROGRAMA_CORTAS)
 
 # ==============================================================================
 # MENSAJE FINAL

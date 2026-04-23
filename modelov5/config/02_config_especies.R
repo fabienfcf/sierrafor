@@ -60,27 +60,7 @@ ECUACIONES_VOLUMEN <- tribble(
 )
 
 # ==============================================================================
-# 3. PARÁMETROS CHAPMAN-RICHARDS (ALTURA-DIÁMETRO)
-# Ecuación: h = a × (1 - exp(-b×d))^c
-# Derivada: dh/dd = a × c × b × exp(-b×d) × (1 - exp(-b×d))^(c-1)
-# ==============================================================================
-# 
-# PARAMETROS_ALTURA_DIAMETRO <- tribble(
-#   ~especie,                ~n,   ~r2,      ~a, ~b, ~c,
-#   "Pinus pseudostrobus", 359, 0.6338, 205.096, 0.00055, 0.6783,
-#   "Pinus teocote", 79, 0.6496, 178.729, 0.00073, 0.6911,
-#   "Quercus affinis", 19, 0.1703, 14.470, 0.01502, 0.4210,
-#   "Quercus laeta", 723, 0.1709, 115.846, 0.00005, 0.4105,
-#   "Quercus rysophylla", 700, 0.1700, 117.098, 0.00011, 0.4366
-# )
-# 
-# # Mapeo de especies sin parámetros específicos a especies equivalentes
-# MAPEO_ESPECIES_ALTURA <- c(
-#   # "Quercus laceyi"  = "Quercus rysophylla"
-# )
-
-# ==============================================================================
-# 4. TASAS DE CRECIMIENTO DIAMÉTRICO BASE (cm/año)
+# 3. TASAS DE CRECIMIENTO DIAMÉTRICO BASE (cm/año)
 # ==============================================================================
 
 CRECIMIENTO_DIAMETRICO <- tribble(
@@ -101,48 +81,14 @@ CRECIMIENTO_DIAMETRICO <- tribble(
 obtener_ecuacion_volumen <- function(nombre_cientifico) {
   resultado <- ECUACIONES_VOLUMEN %>%
     filter(nombre_cientifico == !!nombre_cientifico)
-  
+
   if (nrow(resultado) == 0) {
     warning(sprintf("No se encontró ecuación para '%s'", nombre_cientifico))
     return(NULL)
   }
-  
+
   return(resultado)
 }
-#' 
-#' #' @title Obtener parámetros de altura para una especie
-#' #' @param nombre_cientifico Nombre científico
-#' #' @param dominancia Código de dominancia (1-6) para seleccionar cuartil
-#' #' @return Lista con parámetros (a, b, c) o tibble completo si dominancia=NULL
-#' #' @examples
-#' #' obtener_parametros_altura("Pinus pseudostrobus", dominancia = 1)
-#' obtener_parametros_altura <- function(nombre_cientifico, dominancia = NULL) {
-#'   
-#'   # Aplicar mapeo si existe
-#'   especie_buscar <- nombre_cientifico
-#'   if (nombre_cientifico %in% names(MAPEO_ESPECIES_ALTURA)) {
-#'     especie_buscar <- MAPEO_ESPECIES_ALTURA[nombre_cientifico]
-#'     message(sprintf("Usando parámetros de '%s' para '%s'", 
-#'                     especie_buscar, nombre_cientifico))
-#'   }
-#'   
-#'   params <- PARAMETROS_ALTURA_DIAMETRO %>%
-#'     filter(especie == especie_buscar)
-#'   
-#'   if (nrow(params) == 0) {
-#'     warning(sprintf("Especie '%s' no encontrada en parámetros altura-diámetro", 
-#'                     nombre_cientifico))
-#'     return(NULL)
-#'   }
-#'   
-#'   # Si no se especifica dominancia, retornar toda la fila
-#'   if (is.null(dominancia)) {
-#'     return(params)
-#'   }
-#'   
-#'   # UNA SOLA CURVA POR ESPECIE - mismos parámetros para todas las dominancias
-#'   return(list(a = params$a, b = params$b, c = params$c))
-#' }
 
 #' @title Obtener tasa de crecimiento diamétrico para un género
 #' @param genero "Pinus" o "Quercus"
@@ -162,36 +108,13 @@ obtener_tasa_crecimiento <- function(genero) {
   return(tasa)
 }
 
-#' #' @title Calcular dh/dd desde parámetros Chapman-Richards
-#' #' @param d Diámetro normal (cm)
-#' #' @param a,b,c Parámetros de Chapman-Richards
-#' #' @return Tasa de cambio dh/dd (m/cm)
-#' calcular_dhdd_chapman_richards <- function(d, a, b, c) {
-#'   if (is.na(a) | is.na(b) | is.na(c) | d <= 0) {
-#'     return(NA_real_)
-#'   }
-#'   
-#'   exp_term <- exp(-b * d)
-#'   base_term <- 1 - exp_term
-#'   
-#'   if (base_term <= 0) return(0)
-#'   
-#'   dhdd <- a * c * b * exp_term * (base_term ^ (c - 1))
-#'   
-#'   # Limitar a rango razonable
-#'   return(max(0.05, min(dhdd, 0.50)))
-#' }
-
 # ==============================================================================
 # RESUMEN DE CARGA
 # ==============================================================================
 
 cat(sprintf("  ✓ Especies catalogadas:      %d\n", nrow(ESPECIES)))
 cat(sprintf("  ✓ Ecuaciones de volumen:     %d\n", nrow(ECUACIONES_VOLUMEN)))
-#cat(sprintf("  ✓ Modelos altura-diámetro:   %d\n", nrow(PARAMETROS_ALTURA_DIAMETRO)))
 cat(sprintf("  ✓ Géneros con tasa de crec.: %d\n", nrow(CRECIMIENTO_DIAMETRICO)))
 cat("  ✓ Funciones disponibles:\n")
 cat("      obtener_ecuacion_volumen(especie)\n")
-cat("      obtener_parametros_altura(especie, dominancia)\n")
 cat("      obtener_tasa_crecimiento(genero)\n")
-cat("      calcular_dhdd_chapman_richards(d, a, b, c)\n")

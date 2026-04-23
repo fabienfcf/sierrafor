@@ -96,9 +96,7 @@
   dir.create("datos_intermedios", showWarnings = FALSE)
   saveRDS(arboles_analisis, "datos_intermedios/arboles_analisis.rds")
   saveRDS(inventario, "datos_intermedios/inventario_completo.rds")
-  
-  write.csv(arboles_analisis, file="arboles_analisis.csv")
-  
+
   cat("\n✓ Datos guardados en datos_intermedios/\n")
   
   # ==============================================================================

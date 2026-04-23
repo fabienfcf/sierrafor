@@ -127,36 +127,6 @@ calcular_incremento_altura <- function(arbol, incremento_d, config) {
   return(incremento_h)
 }
 
-
-
-
-# calcular_incremento_altura <- function(arbol, incremento_d, config) {
-#   # Validar que el árbol esté vivo
-#   if (arbol$dominancia %in% c(7, 8, 9)) {
-#     return(0)
-#   }
-#   
-#   # Si no hubo incremento en diámetro, no hay en altura
-#   if (incremento_d <= 0) {
-#     return(0)
-#   }
-#   
-#   # Obtener dh/dd calculado desde Chapman-Richards
-#   dhdd <- config$interpolar_dhdd(
-#     especie = arbol$nombre_cientifico,
-#     diametro = arbol$diametro_normal,
-#     dominancia = 1  # ← FORZAR Q3 (dominante)
-#   )
-#   
-#   # Calcular incremento en altura
-#   incremento_h <- dhdd * incremento_d
-#   
-#   # Limitar incremento máximo razonable
-#   incremento_h <- min(incremento_h, 0.5)  # Máximo 50 cm/año
-#   
-#   return(incremento_h)
-# }
-
 # ==============================================================================
 # 3. FUNCIÓN PRINCIPAL: APLICAR CRECIMIENTO ANUAL
 # ==============================================================================
