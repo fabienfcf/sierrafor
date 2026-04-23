@@ -377,7 +377,7 @@ latex8 <- c(latex8,
 if (!dir.exists("resultados/tablas")) dir.create("resultados/tablas", recursive = TRUE)
 latex8_file <- "resultados/tablas/tabla_8_posibilidad_umm.tex"
 writeLines(latex8, latex8_file)
-writeLines(latex8, "/home/fabien/Documents/CONAFOR/Consultoria/Las Alazanas/PMF - 2026 - 2036/LATEX/tablas/tabla_8_posibilidad_umm.tex")
+writeLines(latex8, "/home/fabien/Documents/CONAFOR/Consultoria/Las Alazanas/2025/PMF - 2026 - 2036/LATEX/tablas/tabla_8_posibilidad_umm.tex")
 
 
 cat(paste(latex8, collapse = "\n"))
@@ -542,7 +542,7 @@ latex9 <- c(latex9,
 # Escribir archivo
 latex9_file <- "resultados/tablas/tabla_9_posibilidad_resumen.tex"
 writeLines(latex9, latex9_file)
-writeLines(latex9, "/home/fabien/Documents/CONAFOR/Consultoria/Las Alazanas/PMF - 2026 - 2036/LATEX/tablas/tabla_9_posibilidad_resumen.tex")
+writeLines(latex9, "/home/fabien/Documents/CONAFOR/Consultoria/Las Alazanas/2025/PMF - 2026 - 2036/LATEX/tablas/tabla_9_posibilidad_resumen.tex")
 
 
 cat(paste(latex9, collapse = "\n"))

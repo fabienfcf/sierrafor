@@ -417,7 +417,7 @@ cat(sprintf("✓ CSV guardado: %s\n\n", csv_file))
 # ==============================================================================
 # RESUMEN
 # ==============================================================================
-writeLines(latex, "/home/fabien/Documents/CONAFOR/Consultoria/Las Alazanas/PMF - 2026 - 2036/LATEX/tablas/tabla_7_densidad_incrementos.tex")
+writeLines(latex, "/home/fabien/Documents/CONAFOR/Consultoria/Las Alazanas/2025/PMF - 2026 - 2036/LATEX/tablas/tabla_7_densidad_incrementos.tex")
 
 cat("╔══════════════════════════════════════════════════════════╗\n")
 cat("║              ✓ TABLA 7 GENERADA                          ║\n")

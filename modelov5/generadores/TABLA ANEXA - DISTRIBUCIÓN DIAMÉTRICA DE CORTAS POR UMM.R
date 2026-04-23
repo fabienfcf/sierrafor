@@ -208,7 +208,7 @@ latex_lines <- c(latex_lines,
 if (!dir.exists("resultados/tablas")) dir.create("resultados/tablas", recursive = TRUE)
 latex_file <- "resultados/tablas/tabla_anexa_distribucion_diametrica.tex"
 writeLines(latex_lines, latex_file)
-writeLines(latex_lines, "/home/fabien/Documents/CONAFOR/Consultoria/Las Alazanas/PMF - 2026 - 2036/LATEX/anexos/tabla_anexa_distribucion_diametrica.tex")
+writeLines(latex_lines, "/home/fabien/Documents/CONAFOR/Consultoria/Las Alazanas/2025/PMF - 2026 - 2036/LATEX/anexos/tabla_anexa_distribucion_diametrica.tex")
 
 # Mostrar tabla
 cat("\n═══════════════════════════════════════════════════════════\n")

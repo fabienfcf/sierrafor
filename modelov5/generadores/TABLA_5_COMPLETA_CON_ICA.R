@@ -542,4 +542,4 @@ write_csv(csv_data, csv_file)
 
 cat(sprintf("✓ CSV guardado: %s\n\n", csv_file))
 
-writeLines(latex, "/home/fabien/Documents/CONAFOR/Consultoria/Las Alazanas/PMF - 2026 - 2036/LATEX/tablas/tabla_5_existencias_umm.tex")
+writeLines(latex, "/home/fabien/Documents/CONAFOR/Consultoria/Las Alazanas/2025/PMF - 2026 - 2036/LATEX/tablas/tabla_5_existencias_umm.tex")

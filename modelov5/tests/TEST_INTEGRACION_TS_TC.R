@@ -1,14 +1,14 @@
 # ==============================================================================
 # TEST DE L'INTÉGRATION TS + TC DANS analisis_descriptivo
 # ==============================================================================
-setwd("/home/fabien/Documents/CONAFOR/Consultoria/Las Alazanas/PMF - 2026 - 2036/Inventario Forestal 102025/R5/")
+setwd("/home/fabien/Documents/CONAFOR/Consultoria/Las Alazanas/2025/PMF - 2026 - 2036/Inventario Forestal 102025/R5/")
 
 # Nettoyer l'environnement
 rm(list = ls())
 
 # Establecer directorio raíz del proyecto
 if (!exists("PROYECTO_ROOT")) {
-  PROYECTO_ROOT <- "/home/fabien/Documents/CONAFOR/Consultoria/Las Alazanas/PMF - 2026 - 2036/Inventario Forestal 102025/R5/modelov5"
+  PROYECTO_ROOT <- "/home/fabien/Documents/CONAFOR/Consultoria/Las Alazanas/2025/PMF - 2026 - 2036/Inventario Forestal 102025/R5/modelov5"
 }
 setwd(PROYECTO_ROOT)
 

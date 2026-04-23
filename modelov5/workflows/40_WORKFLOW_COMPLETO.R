@@ -9,7 +9,7 @@
   gc()
   
   # Configurar directorio
-  setwd("/home/fabien/Documents/CONAFOR/Consultoria/Las Alazanas/PMF - 2026 - 2036/Inventario Forestal 102025/R5/modelov5")
+  setwd("/home/fabien/Documents/CONAFOR/Consultoria/Las Alazanas/2025/PMF - 2026 - 2036/Inventario Forestal 102025/R5/modelov5/")
   
   PROYECTO_ROOT <- getwd()
   cat(sprintf("\n✓ Directorio base: %s\n", PROYECTO_ROOT))

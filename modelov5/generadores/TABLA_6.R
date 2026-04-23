@@ -209,7 +209,7 @@ latex <- c(
 if (!dir.exists("resultados/tablas")) dir.create("resultados/tablas", recursive = TRUE)
 latex_file <- "resultados/tablas/tabla_6_resumen_existencias_predio.tex"
 writeLines(latex, latex_file)
-writeLines(latex, "/home/fabien/Documents/CONAFOR/Consultoria/Las Alazanas/PMF - 2026 - 2036/LATEX/tablas/Tabla 6_resumen_existencias_predio.tex")
+writeLines(latex, "/home/fabien/Documents/CONAFOR/Consultoria/Las Alazanas/2025/PMF - 2026 - 2036/LATEX/tablas/Tabla 6_resumen_existencias_predio.tex")
 
 cat(paste(latex, collapse = "\n"))
 cat("\n\n")

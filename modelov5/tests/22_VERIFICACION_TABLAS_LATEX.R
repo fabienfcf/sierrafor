@@ -2,11 +2,11 @@
 # VERIFICACIÓN Y RESUMEN DE TABLAS LATEX GENERADAS
 # ==============================================================================
 
-setwd("/home/fabien/Documents/CONAFOR/Consultoria/Las Alazanas/PMF - 2026 - 2036/Inventario Forestal 102025/R5")
+setwd("/home/fabien/Documents/CONAFOR/Consultoria/Las Alazanas/2025/PMF - 2026 - 2036/Inventario Forestal 102025/R5")
 
 library(tidyverse)
 
-ruta_latex <- "/home/fabien/Documents/CONAFOR/Consultoria/Las Alazanas/PMF - 2026 - 2036/Inventario Forestal 102025/R5/tablas_latex"
+ruta_latex <- "/home/fabien/Documents/CONAFOR/Consultoria/Las Alazanas/2025/PMF - 2026 - 2036/Inventario Forestal 102025/R5/tablas_latex"
 
 cat("\n")
 cat("╔════════════════════════════════════════════════════════════╗\n")
