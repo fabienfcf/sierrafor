@@ -36,8 +36,8 @@ calcular_incremento_diametro <- function(arbol, config) {
   tasa_base <- config$crecimiento_base[[genero]]
   
   if (is.null(tasa_base)) {
-    warning(sprintf("Género '%s' no encontrado en config. Usando 0.30 cm/año por defecto.", genero))
-    tasa_base <- 0.30
+    warning(sprintf("Género '%s' no encontrado en config. Usando %.2f cm/año por defecto.", genero, config$crecimiento_d_default))
+    tasa_base <- config$crecimiento_d_default
   }
   
   # 2. Aplicar modificador por dominancia - compatible avec codigo ou codigo_dom
@@ -77,27 +77,21 @@ calcular_incremento_altura <- function(arbol, incremento_d, config) {
     return(0)
   }
   
-  # LÍMITES DE ALTURA MÁXIMA 
+  # LÍMITE DE ALTURA MÁXIMA
   # ══════════════════════════════════════════════════════════════
-  
-  # Quercus > 17 m → no crece más en altura
-  if (arbol$genero_grupo == "Quercus" && arbol$altura_total >= 17) {
+
+  h_max <- config$altura_maxima[[arbol$genero_grupo]]
+  if (!is.null(h_max) && arbol$altura_total >= h_max) {
     return(0)
   }
-  
-  # Pinus > 22 m → no crece más en altura
-  if (arbol$genero_grupo == "Pinus" && arbol$altura_total >= 22) {
-    return(0)
-  }
-  
-  # TAUX DE BASE PAR GENRE (m/año)
+
+  # TASA DE BASE EN ALTURA (m/año)
   # ═══════════════════════════════
-  
-  incremento_h_base <- ifelse(
-    arbol$genero_grupo == "Pinus",
-    0.2,  # Pinus: 20 cm/año
-    0.15   # Quercus: 15 cm/año
-  )
+
+  incremento_h_base <- config$crecimiento_altura[[arbol$genero_grupo]]
+  if (is.null(incremento_h_base)) {
+    incremento_h_base <- config$crecimiento_h_default
+  }
   
   # AJUSTEMENT PAR DOMINANCE
   # ══════════════════════════════════════════════════════════════

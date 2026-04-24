@@ -64,10 +64,14 @@ ECUACIONES_VOLUMEN <- tribble(
 # ==============================================================================
 
 CRECIMIENTO_DIAMETRICO <- tribble(
-  ~genero,   ~tasa_base_cm_año, ~fuente,
-  "Pinus",   0.40,              "Observaciones campo + literatura regional",
-  "Quercus", 0.25,              "Observaciones campo + literatura regional"
+  ~genero,   ~tasa_base_cm_año, ~tasa_altura_m_año, ~altura_max_m, ~fuente,
+  "Pinus",   0.40,              0.20,               22,            "Observaciones campo + literatura regional",
+  "Quercus", 0.25,              0.15,               17,            "Observaciones campo + literatura regional"
 )
+
+# Valores por defecto para géneros no catalogados
+CRECIMIENTO_D_DEFAULT <- 0.30  # cm/año
+CRECIMIENTO_H_DEFAULT <- 0.15  # m/año
 
 # ==============================================================================
 # 5. FUNCIONES DE ACCESO RÁPIDO

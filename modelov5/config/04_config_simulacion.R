@@ -99,6 +99,16 @@ crear_configuracion_simulacion <- function() {
       CRECIMIENTO_DIAMETRICO$tasa_base_cm_año,
       CRECIMIENTO_DIAMETRICO$genero
     ),
+    crecimiento_altura = setNames(
+      CRECIMIENTO_DIAMETRICO$tasa_altura_m_año,
+      CRECIMIENTO_DIAMETRICO$genero
+    ),
+    altura_maxima = setNames(
+      CRECIMIENTO_DIAMETRICO$altura_max_m,
+      CRECIMIENTO_DIAMETRICO$genero
+    ),
+    crecimiento_d_default = CRECIMIENTO_D_DEFAULT,
+    crecimiento_h_default = CRECIMIENTO_H_DEFAULT,
     
     # ══════════════════════════════════════════════════════════════
     # DOMINANCIA
