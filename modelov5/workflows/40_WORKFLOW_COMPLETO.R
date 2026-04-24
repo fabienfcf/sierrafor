@@ -20,7 +20,22 @@
   library(janitor)
   library(xtable)
   library(patchwork)
-  
+
+  # ══════════════════════════════════════════════════════════════════════════════
+  # CONTROL DE FASES — editar aquí qué calcular en esta ejecución
+  # TRUE  = ejecutar       FALSE = omitir (usa resultados guardados en disco)
+  #
+  #   Fase              Qué hace                          Tiempo aprox  Requiere
+  # ──────────────────────────────────────────────────────────────────────────────
+  FASES <- list(
+    importar    = TRUE,  # Leer Excel → arboles_analisis.rds       ~10s   Excel
+    descriptivo = TRUE,  # Análisis dasométrico completo            ~30s   importar|.rds
+    incendio    = FALSE, # Riesgo de incendio (combustibles)        ~5s    importar|.rds
+    ica         = TRUE,  # Simulación 10a sin cortas → ICA CSV      ~60s   importar|.rds
+    simulacion  = TRUE   # Simulación 10a con cortas → PMF          ~90s   ica|CSV
+  )
+  # ══════════════════════════════════════════════════════════════════════════════
+
   cat("\n╔════════════════════════════════════════════════════════════╗\n")
   cat("║         WORKFLOW COMPLETO - PMF LAS ALAZANAS              ║\n")
   cat("║              Sistema de Gestión Forestal v2.0             ║\n")
@@ -48,113 +63,175 @@
   cat("✓ Especies, códigos y ecuaciones cargadas\n")
   
   # ==============================================================================
-  # FASE 1: IMPORTACIÓN
+  # FASE 1+2: IMPORTACIÓN Y CONSTRUCCIÓN DEL DATASET
   # ==============================================================================
-  
-  cat("\n╔════════════════════════════════════════════════════════════╗\n")
-  cat("║                   FASE 1: IMPORTACIÓN                     ║\n")
-  cat("╚════════════════════════════════════════════════════════════╝\n")
-  
-  source(file.path(PROYECTO_ROOT, "config/00_importar_inventario.R"))
-  
-  # Importar inventario completo
-  inventario <- importar_inventario_completo(
-    ruta_archivo = "inventario_forestal.xlsx",
-    ruta_umm = "UMM_stats.csv"
-  )
-  
-  cat("\n✓ Inventario importado:\n")
-  cat(sprintf("  • F01 (sitios):         %d registros\n", nrow(inventario$f01)))
-  cat(sprintf("  • F02 (regeneración):   %d árboles\n", nrow(inventario$f02)))
-  cat(sprintf("  • F03 (árboles):        %d árboles\n", nrow(inventario$f03)))
-  cat(sprintf("  • F04 (virutas):        %d registros\n", nrow(inventario$f04)))
-  cat(sprintf("  • F05 (regeneración):   %d registros\n", nrow(inventario$f05)))
-  cat(sprintf("  • F06 (combustibles):   %d sitios\n", nrow(inventario$f06)))
-  
-  # ==============================================================================
-  # FASE 2: CONSTRUCCIÓN DEL DATASET
-  # ==============================================================================
-  
-  cat("\n╔════════════════════════════════════════════════════════════╗\n")
-  cat("║              FASE 2: CONSTRUCCIÓN DEL DATASET             ║\n")
-  cat("╚════════════════════════════════════════════════════════════╝\n")
-  
-  source(file.path(PROYECTO_ROOT, "core/15_core_calculos.R"))
-  
-  # Construir dataset de árboles
-  arboles_analisis <- construir_arboles_analisis(inventario, CONFIG)
-  
-  cat(sprintf("\n✓ Dataset construido:\n"))
-  cat(sprintf("  • Árboles totales:   %d\n", nrow(arboles_analisis)))
-  cat(sprintf("  • Árboles vivos:     %d\n", 
-              sum(es_arbol_vivo(arboles_analisis$dominancia))))
-  cat(sprintf("  • Rodales:           %d\n", n_distinct(arboles_analisis$rodal)))
-  cat(sprintf("  • Géneros:           %s\n", 
-              paste(unique(arboles_analisis$genero_grupo), collapse = ", ")))
-  
-  # Guardar datos intermedios
-  dir.create("datos_intermedios", showWarnings = FALSE)
-  saveRDS(arboles_analisis, "datos_intermedios/arboles_analisis.rds")
-  saveRDS(inventario, "datos_intermedios/inventario_completo.rds")
 
-  cat("\n✓ Datos guardados en datos_intermedios/\n")
+  if (FASES$importar) {
+
+    cat("\n╔════════════════════════════════════════════════════════════╗\n")
+    cat("║                   FASE 1: IMPORTACIÓN                     ║\n")
+    cat("╚════════════════════════════════════════════════════════════╝\n")
+
+    source(file.path(PROYECTO_ROOT, "config/00_importar_inventario.R"))
+
+    inventario <- importar_inventario_completo(
+      ruta_archivo = "inventario_forestal.xlsx",
+      ruta_umm = "UMM_stats.csv"
+    )
+
+    cat("\n✓ Inventario importado:\n")
+    cat(sprintf("  • F01 (sitios):         %d registros\n", nrow(inventario$f01)))
+    cat(sprintf("  • F02 (regeneración):   %d árboles\n", nrow(inventario$f02)))
+    cat(sprintf("  • F03 (árboles):        %d árboles\n", nrow(inventario$f03)))
+    cat(sprintf("  • F04 (virutas):        %d registros\n", nrow(inventario$f04)))
+    cat(sprintf("  • F05 (regeneración):   %d registros\n", nrow(inventario$f05)))
+    cat(sprintf("  • F06 (combustibles):   %d sitios\n", nrow(inventario$f06)))
+
+    cat("\n╔════════════════════════════════════════════════════════════╗\n")
+    cat("║              FASE 2: CONSTRUCCIÓN DEL DATASET             ║\n")
+    cat("╚════════════════════════════════════════════════════════════╝\n")
+
+    source(file.path(PROYECTO_ROOT, "core/15_core_calculos.R"))
+
+    arboles_analisis <- construir_arboles_analisis(inventario, CONFIG)
+
+    cat(sprintf("\n✓ Dataset construido:\n"))
+    cat(sprintf("  • Árboles totales:   %d\n", nrow(arboles_analisis)))
+    cat(sprintf("  • Árboles vivos:     %d\n",
+                sum(es_arbol_vivo(arboles_analisis$dominancia))))
+    cat(sprintf("  • Rodales:           %d\n", n_distinct(arboles_analisis$rodal)))
+    cat(sprintf("  • Géneros:           %s\n",
+                paste(unique(arboles_analisis$genero_grupo), collapse = ", ")))
+
+    dir.create("datos_intermedios", showWarnings = FALSE)
+    saveRDS(arboles_analisis, "datos_intermedios/arboles_analisis.rds")
+    saveRDS(inventario, "datos_intermedios/inventario_completo.rds")
+    cat("\n✓ Datos guardados en datos_intermedios/\n")
+
+  } else {
+    cat("\n[FASE 1+2 omitida] Cargando desde datos_intermedios/...\n")
+    rds_path <- "datos_intermedios/arboles_analisis.rds"
+    if (!file.exists(rds_path)) stop("❌ No existe arboles_analisis.rds. Activa FASES$importar = TRUE")
+    arboles_analisis <- readRDS(rds_path)
+    inventario       <- readRDS("datos_intermedios/inventario_completo.rds")
+    source(file.path(PROYECTO_ROOT, "core/15_core_calculos.R"))
+    cat(sprintf("  ✓ %d árboles cargados desde disco\n", nrow(arboles_analisis)))
+  }
   
   # ==============================================================================
   # FASE 3: ANÁLISIS DESCRIPTIVO
   # ==============================================================================
-  
-  cat("\n╔════════════════════════════════════════════════════════════╗\n")
-  cat("║              FASE 3: ANÁLISIS DESCRIPTIVO                 ║\n")
-  cat("╚════════════════════════════════════════════════════════════╝\n")
-  
-  source(file.path(PROYECTO_ROOT, "analisis/20_analisis_descriptivo.R"))
-  
-  # Ejecutar análisis completo
-  resultados_descriptivos <- analisis_descriptivo_completo(
-    inventario = inventario,
-    arboles_df = arboles_analisis,
-    config = CONFIG
-  )
-  
-  # Guardar resultados
-  dir.create("resultados", showWarnings = FALSE)
-  saveRDS(resultados_descriptivos, "resultados/analisis_descriptivo.rds")
-  
-  cat("\n✓ Análisis descriptivo guardado en resultados/\n")
+
+  if (FASES$descriptivo) {
+
+    cat("\n╔════════════════════════════════════════════════════════════╗\n")
+    cat("║              FASE 3: ANÁLISIS DESCRIPTIVO                 ║\n")
+    cat("╚════════════════════════════════════════════════════════════╝\n")
+
+    source(file.path(PROYECTO_ROOT, "analisis/20_analisis_descriptivo.R"))
+
+    resultados_descriptivos <- analisis_descriptivo_completo(
+      inventario = inventario,
+      arboles_df = arboles_analisis,
+      config = CONFIG
+    )
+
+    dir.create("resultados", showWarnings = FALSE)
+    saveRDS(resultados_descriptivos, "resultados/analisis_descriptivo.rds")
+
+    cat("\n✓ Análisis descriptivo guardado en resultados/\n")
+
+  } else {
+    cat("\n[FASE 3 omitida] Cargando analisis_descriptivo.rds desde disco si existe...\n")
+    rds_desc <- "resultados/analisis_descriptivo.rds"
+    if (file.exists(rds_desc)) {
+      resultados_descriptivos <- readRDS(rds_desc)
+      cat("  ✓ Análisis descriptivo cargado desde disco\n")
+    }
+  }
   
   # ==============================================================================
   # FASE 4: ANÁLISIS DE RIESGO DE INCENDIO
   # ==============================================================================
-  
-  cat("\n╔════════════════════════════════════════════════════════════╗\n")
-  cat("║           FASE 4: ANÁLISIS DE RIESGO DE INCENDIO         ║\n")
-  cat("╚════════════════════════════════════════════════════════════╝\n")
-  
-  source(file.path(PROYECTO_ROOT, "opcional/23_Main_incendio.R"))
-   
+
+  if (FASES$incendio) {
+
+    cat("\n╔════════════════════════════════════════════════════════════╗\n")
+    cat("║           FASE 4: ANÁLISIS DE RIESGO DE INCENDIO         ║\n")
+    cat("╚════════════════════════════════════════════════════════════╝\n")
+
+    source(file.path(PROYECTO_ROOT, "opcional/23_Main_incendio.R"))
+
+  } else {
+    cat("\n[FASE 4 omitida] Riesgo de incendio no recalculado.\n")
+  }
   
   # ==============================================================================
-  # FASE 5: SIMULACIÓN 10 AÑOS
+  # FASE 4.5: CÁLCULO DE ICA (SIMULACIÓN SIN CORTAS)
+  # Requerido por FASE 5 — el optimizador Liocourt usa resultados/31_ica_por_rodal.csv
   # ==============================================================================
-  
-  cat("\n╔════════════════════════════════════════════════════════════╗\n")
-  cat("║              FASE 5: SIMULACIÓN 10 AÑOS                   ║\n")
-  cat("╚════════════════════════════════════════════════════════════╝\n")
-  
-  # Cargar módulos de simulación
-  cat("\n[5.1] Cargando módulos de simulación...\n")
-  source(file.path(PROYECTO_ROOT, "core/10_modelos_crecimiento.R"))
-  source(file.path(PROYECTO_ROOT, "core/11_modelo_mortalidad.R"))
-  source(file.path(PROYECTO_ROOT, "core/12_modelo_reclutamiento.R"))
-  source(file.path(PROYECTO_ROOT, "core/13_simulador_crecimiento.R"))
-  source(file.path(PROYECTO_ROOT, "core/14_optimizador_cortas.R"))
-  
-  cat("\n[5.2] Ejecutando simulación completa...\n")
-  
-  # Ejecutar simulación con programa de cortas
-  source(file.path(PROYECTO_ROOT, "simulaciones/30_SIMULACION_10AÑOS_COMPLETA.R"))
-  
-  cat("\n✓ Simulación 10 años completada\n")
+
+  if (FASES$ica) {
+
+    cat("\n╔════════════════════════════════════════════════════════════╗\n")
+    cat("║         FASE 4.5: CÁLCULO DE ICA (SIN CORTAS)            ║\n")
+    cat("╚════════════════════════════════════════════════════════════╝\n")
+
+    source(file.path(PROYECTO_ROOT, "core/10_modelos_crecimiento.R"))
+    source(file.path(PROYECTO_ROOT, "core/11_modelo_mortalidad.R"))
+    source(file.path(PROYECTO_ROOT, "core/12_modelo_reclutamiento.R"))
+    source(file.path(PROYECTO_ROOT, "core/16_calcular_ica.R"))
+
+    arboles_ica <- arboles_analisis %>%
+      filter(genero_grupo %in% CONFIG$generos)
+
+    cat(sprintf("  • Población para ICA: %d árboles (%d rodales)\n",
+                nrow(arboles_ica), n_distinct(arboles_ica$rodal)))
+
+    resultado_ica <- calcular_ica_sin_cortes(
+      arboles_inicial = arboles_ica,
+      config = CONFIG,
+      años = CONFIG$periodo
+    )
+
+    exportar_tablas_latex_ica(resultado_ica, directorio = "tablas_latex")
+    guardar_resultados_ica(resultado_ica, directorio = "resultados")
+
+    cat("\n✓ ICA calculado y guardado en resultados/ y tablas_latex/\n")
+
+  } else {
+    cat("\n[FASE 4.5 omitida] Usando resultados/31_ica_por_rodal.csv desde disco.\n")
+    if (!file.exists("resultados/31_ica_por_rodal.csv")) {
+      stop("❌ resultados/31_ica_por_rodal.csv no existe. Activa FASES$ica = TRUE")
+    }
+  }
+
+  # ==============================================================================
+  # FASE 5: SIMULACIÓN 10 AÑOS (CON CORTAS)
+  # ==============================================================================
+
+  if (FASES$simulacion) {
+
+    cat("\n╔════════════════════════════════════════════════════════════╗\n")
+    cat("║              FASE 5: SIMULACIÓN 10 AÑOS                   ║\n")
+    cat("╚════════════════════════════════════════════════════════════╝\n")
+
+    cat("\n[5.1] Cargando módulos de simulación...\n")
+    source(file.path(PROYECTO_ROOT, "core/10_modelos_crecimiento.R"))
+    source(file.path(PROYECTO_ROOT, "core/11_modelo_mortalidad.R"))
+    source(file.path(PROYECTO_ROOT, "core/12_modelo_reclutamiento.R"))
+    source(file.path(PROYECTO_ROOT, "core/13_simulador_crecimiento.R"))
+    source(file.path(PROYECTO_ROOT, "core/14_optimizador_cortas.R"))
+
+    cat("\n[5.2] Ejecutando simulación completa...\n")
+
+    source(file.path(PROYECTO_ROOT, "simulaciones/30_SIMULACION_10AÑOS_COMPLETA.R"))
+
+    cat("\n✓ Simulación 10 años completada\n")
+
+  } else {
+    cat("\n[FASE 5 omitida] Simulación con cortas no ejecutada.\n")
+  }
   
   # ==============================================================================
   # RESUMEN FINAL
