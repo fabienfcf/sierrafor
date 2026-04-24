@@ -40,7 +40,7 @@ cat("Cargando datos...\n")
 arboles <- read.csv(file.path(PROYECTO_ROOT, "arboles_analisis.csv"),
                     stringsAsFactors = FALSE) %>%
   mutate(
-    estado      = ifelse(dominancia %in% c(7, 8, 9), "muerto", "vivo"),
+    estado      = ifelse(!es_arbol_vivo(dominancia), "muerto", "vivo"),
     dano1_lbl   = cod_lbl(dano_fisico1, DANOS),
     sanidad_lbl = cod_lbl(sanidad, SANIDAD)
   )

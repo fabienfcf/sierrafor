@@ -27,7 +27,7 @@ cat("\n[RECLUTAMIENTO] Cargando módulo de reclutamiento...\n")
 calcular_n_reclutas <- function(arboles_rodal, config = CONFIG) {
   
   # Contar árboles vivos actuales
-  n_vivos <- sum(!arboles_rodal$dominancia %in% c(7, 8, 9))
+  n_vivos <- sum(es_arbol_vivo(arboles_rodal$dominancia))
   
   # Calcular número de reclutas según tasa
   n_reclutas <- round(n_vivos * config$tasa_reclutamiento)
@@ -293,7 +293,7 @@ aplicar_reclutamiento <- function(arboles_df, config = CONFIG, año_actual) {
   }
   
   # Contar total después
-  n_vivos_final <- sum(!arboles_con_reclutas$dominancia %in% c(7, 8, 9))
+  n_vivos_final <- sum(es_arbol_vivo(arboles_con_reclutas$dominancia))
   cat(sprintf("  Árboles vivos después: %d\n", n_vivos_final))
   
   return(arboles_con_reclutas)

@@ -41,7 +41,7 @@ calcular_diversidad <- function(arboles_df,
   
   # Filtrar solo árboles vivos
   if ("dominancia" %in% names(arboles_df)) {
-    arboles_df <- arboles_df %>% filter(dominancia < 7)
+    arboles_df <- filtrar_arboles_vivos(arboles_df)
   }
   
   # Función para calcular índices
@@ -173,7 +173,7 @@ calcular_muertos_tocones <- function(arboles_df,
   
   # Si hay datos de altura en el género, usar promedio
   alturas_genero <- arboles_df %>%
-    filter(dominancia < 7, !is.na(altura_total)) %>%
+    filter(es_arbol_vivo(dominancia), !is.na(altura_total)) %>%
     group_by(genero_grupo) %>%
     summarise(h_media_genero = mean(altura_total, na.rm = TRUE), .groups = "drop")
   
@@ -240,17 +240,16 @@ calcular_balance_demografico <- function(resultado_simulacion,
   final <- resultado_simulacion$poblacion_final
   
   # Contar estados
-  n_inicial <- nrow(inicial %>% filter(dominancia < 7))
-  n_final <- nrow(final %>% filter(dominancia < 7))
-  
+  n_inicial <- nrow(filtrar_arboles_vivos(inicial))
+  n_final <- nrow(filtrar_arboles_vivos(final))
+
   # Identificar eventos
   # Muertos: árboles con dominancia 7, 8, 9 que no estaban así inicialmente
-  ids_iniciales <- inicial %>% 
-    filter(dominancia < 7) %>% 
+  ids_iniciales <- filtrar_arboles_vivos(inicial) %>%
     pull(arbol_id)
-  
+
   muertos <- final %>%
-    filter(arbol_id %in% ids_iniciales, dominancia %in% 7:9) %>%
+    filter(arbol_id %in% ids_iniciales, !es_arbol_vivo(dominancia)) %>%
     nrow()
   
   # Reclutas: árboles con ID que contiene "RECLUTA"
@@ -304,7 +303,7 @@ calcular_resumen_predio <- function(arboles_df,
   n_rodales <- n_distinct(arboles_df$rodal)
   n_sitios <- n_distinct(arboles_df$muestreo)
   
-  vivos <- arboles_df %>% filter(dominancia < 7)
+  vivos <- filtrar_arboles_vivos(arboles_df)
   n_arboles_total <- nrow(vivos)
   
   # Superficie
@@ -363,7 +362,7 @@ calcular_resumen_predio <- function(arboles_df,
 #' @return Data frame con métricas promedio ± SD inter-rodal
 calcular_composicion_floristica <- function(arboles_df, config = CONFIG) {
   
-  vivos <- arboles_df %>% filter(dominancia < 7)
+  vivos <- filtrar_arboles_vivos(arboles_df)
   n_sitios <- n_distinct(arboles_df$muestreo)
   
   # Calcular métricas por rodal primero
@@ -569,7 +568,7 @@ calcular_sanidad <- function(arboles_df) {
   }
   
   # Solo árboles vivos
-  vivos <- arboles_df %>% filter(dominancia < 7)
+  vivos <- filtrar_arboles_vivos(arboles_df)
   
   sanidad <- vivos %>%
     mutate(

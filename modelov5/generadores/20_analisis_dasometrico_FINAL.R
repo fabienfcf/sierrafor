@@ -38,8 +38,7 @@ analizar_dasometrico_con_ic <- function(arboles_df,
   }
   
   # Separar vivos y muertos (excluir tocones = dominancia 9)
-  vivos <- arboles_df %>% 
-    filter(!dominancia %in% c(7, 8, 9))
+  vivos <- filtrar_arboles_vivos(arboles_df)
   
   muertos <- arboles_df %>% 
     filter(dominancia == 8)  # Solo muertos, NO tocones (9)

@@ -27,9 +27,8 @@ COLORES_GENERO <- c(
 
 grafico_frecuencia_especies <- function(arboles_df) {
   
-  vivos <- arboles_df %>%
-    filter(!dominancia %in% c(7, 8, 9),
-           genero_grupo %in% c("Pinus", "Quercus"))
+  vivos <- filtrar_arboles_vivos(arboles_df) %>%
+    filter(genero_grupo %in% c("Pinus", "Quercus"))
   
   freq_especies <- vivos %>%
     count(nombre_cientifico, genero_grupo) %>%
@@ -69,9 +68,8 @@ grafico_frecuencia_especies <- function(arboles_df) {
 # ==============================================================================
 
 grafico_frecuencia_ab <- function(arboles_df, genero_filtro = NULL, config = CONFIG) {
-  
-  vivos <- arboles_df %>%
-    filter(!dominancia %in% c(7, 8, 9))
+
+  vivos <- filtrar_arboles_vivos(arboles_df)
   
   # Filtrar por género si especificado
   if (!is.null(genero_filtro)) {
@@ -132,9 +130,8 @@ grafico_frecuencia_ab <- function(arboles_df, genero_filtro = NULL, config = CON
 # ==============================================================================
 
 grafico_frecuencia_volumen <- function(arboles_df, genero_filtro = NULL, config = CONFIG) {
-  
-  vivos <- arboles_df %>%
-    filter(!dominancia %in% c(7, 8, 9))
+
+  vivos <- filtrar_arboles_vivos(arboles_df)
   
   # Filtrar por género si especificado
   if (!is.null(genero_filtro)) {
@@ -194,9 +191,8 @@ grafico_frecuencia_volumen <- function(arboles_df, genero_filtro = NULL, config 
 # ==============================================================================
 
 grafico_distribucion_diametro <- function(arboles_df, genero_filtro = NULL, config = CONFIG) {
-  
-  vivos <- arboles_df %>%
-    filter(!dominancia %in% c(7, 8, 9))
+
+  vivos <- filtrar_arboles_vivos(arboles_df)
   
   # Filtrar por género si especificado
   if (!is.null(genero_filtro)) {
@@ -248,9 +244,8 @@ grafico_distribucion_diametro <- function(arboles_df, genero_filtro = NULL, conf
 
 grafico_distribucion_altura <- function(arboles_df, genero_filtro = NULL, config = CONFIG) {
   
-  vivos <- arboles_df %>%
-    filter(!dominancia %in% c(7, 8, 9),
-           !is.na(altura_total))
+  vivos <- filtrar_arboles_vivos(arboles_df) %>%
+    filter(!is.na(altura_total))
   
   # Filtrar por género si especificado
   if (!is.null(genero_filtro)) {

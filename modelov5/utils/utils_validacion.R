@@ -69,7 +69,7 @@ validar_crecimiento <- function(arboles_antes, arboles_despues) {
   }
 
   # Verificar que muertos no crecieron
-  muertos_despues <- arboles_despues %>% filter(dominancia %in% c(7, 8, 9))
+  muertos_despues <- filtrar_arboles_muertos(arboles_despues)
   if (nrow(muertos_despues) > 0) {
     incrementos_muertos <- sum(
       muertos_despues$incremento_d_cm > 0 |
@@ -105,8 +105,8 @@ validar_mortalidad <- function(arboles_antes, arboles_despues) {
   }
 
   # Contar cambios
-  vivos_antes <- sum(!arboles_antes$dominancia %in% c(7, 8, 9))
-  vivos_despues <- sum(!arboles_despues$dominancia %in% c(7, 8, 9))
+  vivos_antes <- sum(es_arbol_vivo(arboles_antes$dominancia))
+  vivos_despues <- sum(es_arbol_vivo(arboles_despues$dominancia))
   muertos_nuevos <- vivos_antes - vivos_despues
 
   cat(sprintf("✓ Árboles vivos antes:    %d\n", vivos_antes))

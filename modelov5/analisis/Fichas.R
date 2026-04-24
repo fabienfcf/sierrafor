@@ -89,7 +89,7 @@ arboles <- arboles %>%
       !is.na(diametro_copa_ns) & !is.na(diametro_copa_eo) &
         diametro_copa_ns > 0 & diametro_copa_eo > 0,
       pi * (diametro_copa_ns / 2) * (diametro_copa_eo / 2), NA_real_),
-    estado = ifelse(dominancia %in% c(7, 8, 9), "muerto", "vivo"),
+    estado = ifelse(!es_arbol_vivo(dominancia), "muerto", "vivo"),
     # Recalcular volumen para muertos en pie/caído con altura medida
     volumen_m3 = ifelse(
       estado == "muerto" & dominancia != 9 & altura_total > 0 & volumen_m3 == 0,

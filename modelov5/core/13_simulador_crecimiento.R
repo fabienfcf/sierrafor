@@ -41,7 +41,7 @@ actualizar_volumenes <- function(arboles_df) {
   arboles_actualizado <- calcular_volumenes_vectorizado(arboles_actualizado)
   
   arboles_actualizado <- arboles_actualizado %>%
-    mutate(volumen_m3 = if_else(dominancia %in% c(7, 8, 9), 0, volumen_m3))
+    mutate(volumen_m3 = if_else(!es_arbol_vivo(dominancia), 0, volumen_m3))
   
   vol_total <- sum(arboles_actualizado$volumen_m3, na.rm = TRUE)
   vivos <- filtrar_arboles_vivos(arboles_actualizado)

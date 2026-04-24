@@ -26,7 +26,7 @@ cat("\n[MORTALIDAD] Cargando módulo de mortalidad...\n")
 calcular_probabilidad_muerte <- function(arbol, config = CONFIG) {
   
   # Árboles ya muertos permanecen muertos
-  if (arbol$dominancia %in% c(7, 8, 9)) {
+  if (!es_arbol_vivo(arbol$dominancia)) {
     return(1.0)  # 100% muerto (ya está muerto)
   }
   
@@ -60,7 +60,7 @@ calcular_probabilidad_muerte <- function(arbol, config = CONFIG) {
 aplicar_mortalidad_arbol <- function(arbol, config = CONFIG, valor_aleatorio) {
   
   # Si ya está muerto, no hacer nada
-  if (arbol$dominancia %in% c(7, 8, 9)) {
+  if (!es_arbol_vivo(arbol$dominancia)) {
     arbol$murio_este_año <- FALSE
     arbol$dominancia_original <- NA_real_
     return(arbol)
@@ -96,7 +96,7 @@ aplicar_mortalidad_poblacion <- function(arboles_df, config = CONFIG, año_actua
   cat(sprintf("\n[AÑO %d] Aplicando mortalidad...\n", año_actual))
   
   # Contar vivos iniciales
-  n_vivos_inicial <- sum(!arboles_df$dominancia %in% c(7, 8, 9))
+  n_vivos_inicial <- sum(es_arbol_vivo(arboles_df$dominancia))
   
   cat(sprintf("  Árboles vivos al inicio: %d\n", n_vivos_inicial))
   
@@ -136,7 +136,7 @@ aplicar_mortalidad_poblacion <- function(arboles_df, config = CONFIG, año_actua
   
   # Contar muertos este año
   n_muertos_año <- sum(arboles_procesados$murio_este_año, na.rm = TRUE)
-  n_vivos_final <- sum(!arboles_procesados$dominancia %in% c(7, 8, 9))
+  n_vivos_final <- sum(es_arbol_vivo(arboles_procesados$dominancia))
   
   cat(sprintf("  Árboles muertos este año: %d (%.2f%%)\n", 
               n_muertos_año, 
@@ -196,7 +196,7 @@ reporte_mortalidad_acumulada <- function(arboles_df, config = CONFIG) {
     group_by(genero_grupo) %>%
     summarise(
       n_total = n(),
-      n_muertos = sum(dominancia %in% c(7, 8, 9)),
+      n_muertos = sum(!es_arbol_vivo(dominancia)),
       n_vivos = n_total - n_muertos,
       tasa_mort_pct = (n_muertos / n_total) * 100,
       .groups = "drop"

@@ -51,8 +51,8 @@ generar_tabla_5_completa_con_ica <- function(arboles_df,
   
   cat("[1/6] Calculando Existencias Reales por especie...\n")
   
-  vivos <- arboles_df %>% filter(!dominancia %in% c(7, 8, 9))
-  
+  vivos <- filtrar_arboles_vivos(arboles_df)
+
   # Por especie (Pinus y Quercus)
   por_especie <- vivos %>%
     filter(genero_grupo %in% c("Pinus", "Quercus")) %>%
@@ -388,8 +388,7 @@ tabla_6_existencias_por_categoria <- function(arboles_df, config = CONFIG) {
   
   cat("\n[TABLA 6] Existencias por categoría diamétrica...\n")
   
-  vivos <- arboles_df %>% 
-    filter(!dominancia %in% c(7, 8, 9)) %>%
+  vivos <- filtrar_arboles_vivos(arboles_df) %>%
     mutate(clase_d = asignar_clase_diametrica(
       diametro_normal, 
       breaks = config$clases_d,

@@ -47,7 +47,7 @@ arboles_analisis <- construir_arboles_analisis(inventario, CONFIG)
 
 cat(sprintf("  ✓ Árboles procesados: %d\n", nrow(arboles_analisis)))
 cat(sprintf("  ✓ Árboles vivos: %d\n", 
-            sum(!arboles_analisis$dominancia %in% c(7, 8, 9))))
+            sum(es_arbol_vivo(arboles_analisis$dominancia))))
 
 # ==============================================================================
 # 4. GENERAR TABLA CON MÉTRICAS

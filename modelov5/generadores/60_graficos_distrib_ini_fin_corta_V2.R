@@ -51,8 +51,7 @@ extraer_centro_clase <- function(clase_label) {
 calcular_densidad_ha <- function(df, area_parcela_ha) {
   
   # Filtrer arbres vivants uniquement
-  df_vivos <- df %>%
-    filter(!dominancia %in% c(7, 8, 9))
+  df_vivos <- filtrar_arboles_vivos(df)
   
   # Assigner classe diamétrique
   df_vivos <- df_vivos %>%
@@ -164,7 +163,7 @@ for (i in 1:nrow(anos_corta)) {
   # Arbres coupés cette année
   cortado <- cortas %>%
     filter(rodal_cortado == rodal_id, ano_corta == ano) %>%
-    filter(!dominancia %in% c(7, 8, 9)) %>%
+    filter(es_arbol_vivo(dominancia)) %>%
     mutate(
       rodal = rodal_cortado,
       clase_d = asignar_clase_diametrica(diametro_normal)

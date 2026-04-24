@@ -28,7 +28,7 @@ calcular_incremento_diametro <- function(arbol, config) {
   dominancia <- arbol$dominancia
   
   # Validar que el árbol esté vivo
-  if (dominancia %in% c(7, 8, 9)) {
+  if (!es_arbol_vivo(dominancia)) {
     return(0)  # Árboles muertos no crecen
   }
   
@@ -68,7 +68,7 @@ calcular_incremento_diametro <- function(arbol, config) {
 calcular_incremento_altura <- function(arbol, incremento_d, config) {
   
   # Validar que el árbol esté vivo
-  if (arbol$dominancia %in% c(7, 8, 9)) {
+  if (!es_arbol_vivo(arbol$dominancia)) {
     return(0)
   }
   
@@ -200,7 +200,7 @@ aplicar_crecimiento_poblacion <- function(arboles_df, config, año_actual = NULL
   cat(sprintf("  Árboles vivos: %d\n", n_vivos_inicial))
   
   # Contar muertos
-  muertos_inicial <- arboles_df %>% filter(dominancia %in% c(7, 8, 9))
+  muertos_inicial <- filtrar_arboles_muertos(arboles_df)
   n_muertos_inicial <- nrow(muertos_inicial)
   if (n_muertos_inicial > 0) {
     cat(sprintf("  Árboles muertos (sin crecimiento): %d\n", n_muertos_inicial))

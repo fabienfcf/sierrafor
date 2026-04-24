@@ -43,8 +43,7 @@ asignar_clase_diametrica <- function(d) {
 calcular_densidad_ha <- function(df, area_parcela_ha) {
   
   # Filtrer arbres vivants uniquement
-  df_vivos <- df %>%
-    filter(!dominancia %in% c(7, 8, 9))
+  df_vivos <- filtrar_arboles_vivos(df)
   
   # Assigner classe diamétrique
   df_vivos <- df_vivos %>%
@@ -104,8 +103,7 @@ cat(sprintf("  ✓ Final: %d UMM × genres × classes\n",
 # Arbres COUPÉS (toutes années confondues)
 if (nrow(cortas) > 0) {
   
-  cortado <- cortas %>%
-    filter(!dominancia %in% c(7, 8, 9)) %>%
+  cortado <- filtrar_arboles_vivos(cortas) %>%
     mutate(
       rodal = rodal_cortado,
       clase_d = asignar_clase_diametrica(diametro_normal)

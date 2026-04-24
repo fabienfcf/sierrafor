@@ -499,7 +499,7 @@ construir_arboles_analisis <- function(inventario, config = CONFIG) {
   
   # Poner volumen = 0 para árboles muertos
   arboles <- arboles %>%
-    mutate(volumen_m3 = if_else(dominancia %in% c(7, 8, 9), 0, volumen_m3))
+    mutate(volumen_m3 = if_else(!es_arbol_vivo(dominancia), 0, volumen_m3))
   
   cat("[5/5] Agregando información de rodales...\n")
   
@@ -557,7 +557,7 @@ construir_arboles_analisis <- function(inventario, config = CONFIG) {
   
   # Estadísticas finales
   n_total <- nrow(arboles)
-  n_vivos <- sum(!arboles$dominancia %in% c(7, 8, 9))
+  n_vivos <- sum(es_arbol_vivo(arboles$dominancia))
   n_con_volumen <- sum(!is.na(arboles$volumen_m3) & arboles$volumen_m3 > 0)
   vol_total <- sum(arboles$volumen_m3, na.rm = TRUE)
   
@@ -576,8 +576,7 @@ construir_arboles_analisis <- function(inventario, config = CONFIG) {
   cat(sprintf("  • Especies:               %d\n", n_distinct(arboles$nombre_cientifico)))
   
   # Resumen por género
-  resumen_genero <- arboles %>%
-    filter(!dominancia %in% c(7, 8, 9)) %>%
+  resumen_genero <- filtrar_arboles_vivos(arboles) %>%
     count(genero_grupo, name = "n") %>%
     mutate(pct = n / sum(n) * 100)
   

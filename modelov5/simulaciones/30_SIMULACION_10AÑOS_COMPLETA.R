@@ -197,7 +197,7 @@ cat("\n[4/6] Generando gráficos...\n")
 
 # Calcular métricas detalladas por género desde df_historial
 metricas_por_genero <- df_historial %>%
-  filter(!dominancia %in% c(7, 8, 9)) %>%
+  filter(es_arbol_vivo(dominancia)) %>%
   group_by(rodal, ano_simulacion, genero_grupo) %>%
   summarise(
     n_arboles = n(),

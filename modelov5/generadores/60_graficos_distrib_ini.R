@@ -25,7 +25,7 @@ cat("\n[1/5] Cargando datos iniciales...\n")
 historial <- readRDS("resultados/historial_completo_10anos.rds")
 
 inicial <- historial %>%
-  filter(ano_simulacion == 0, !dominancia %in% c(7, 8, 9))
+  filter(ano_simulacion == 0, es_arbol_vivo(dominancia))
 
 cat(sprintf("  ✓ %d árboles vivos en año 0\n", nrow(inicial)))
 cat(sprintf("  ✓ Parámetros Liocourt: Q = %.2f, Clase ref = %d cm\n", 

@@ -486,7 +486,7 @@ analizar_ab_por_dominancia <- function(arboles_df, config = CONFIG,
     summarise(
       ab_total_m2ha = sum(ab_m2ha),
       ab_vivos_m2ha = sum(ab_m2ha[dominancia %in% 1:6]),
-      ab_muertos_m2ha = sum(ab_m2ha[dominancia %in% 7:9]),
+      ab_muertos_m2ha = sum(ab_m2ha[!es_arbol_vivo(dominancia)]),
       pct_muertos = (ab_muertos_m2ha / ab_total_m2ha) * 100,
       .groups = "drop"
     )
@@ -695,10 +695,10 @@ calcular_cv_predio <- function(arboles_df, config) {
   n_sitios <- n_distinct(todos_sitios$muestreo)
   
   # Árboles vivos por sitio y género
-  vivos <- arboles_df %>%
-    filter(!dominancia %in% c(7, 8, 9)) %>%
+  vivos <- filtrar_arboles_vivos(arboles_df) %>%
     filter(genero_grupo %in% c("Pinus", "Quercus"))
-  
+
+
   metricas_por_sitio <- vivos %>%
     group_by(muestreo, genero_grupo) %>%
     summarise(
@@ -829,8 +829,7 @@ analizar_dasometrico_cv <- function(arboles_df,
   
   cat("\n[PASO 2] Calculando valores por especie, género y UMM...\n")
   
-  vivos <- arboles_df %>%
-    filter(!dominancia %in% c(7, 8, 9)) %>%
+  vivos <- filtrar_arboles_vivos(arboles_df) %>%
     filter(genero_grupo %in% c("Pinus", "Quercus")) %>%
     mutate(rodal = as.character(rodal))
   

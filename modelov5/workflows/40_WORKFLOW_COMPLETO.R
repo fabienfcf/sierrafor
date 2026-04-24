@@ -87,7 +87,7 @@
   cat(sprintf("\n✓ Dataset construido:\n"))
   cat(sprintf("  • Árboles totales:   %d\n", nrow(arboles_analisis)))
   cat(sprintf("  • Árboles vivos:     %d\n", 
-              sum(!arboles_analisis$dominancia %in% c(7, 8, 9))))
+              sum(es_arbol_vivo(arboles_analisis$dominancia))))
   cat(sprintf("  • Rodales:           %d\n", n_distinct(arboles_analisis$rodal)))
   cat(sprintf("  • Géneros:           %s\n", 
               paste(unique(arboles_analisis$genero_grupo), collapse = ", ")))
