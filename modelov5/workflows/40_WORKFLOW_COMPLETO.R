@@ -32,7 +32,8 @@
     descriptivo = TRUE,  # Análisis dasométrico completo            ~30s   importar|.rds
     incendio    = FALSE, # Riesgo de incendio (combustibles)        ~5s    importar|.rds
     ica         = TRUE,  # Simulación 10a sin cortas → ICA CSV      ~60s   importar|.rds
-    simulacion  = TRUE   # Simulación 10a con cortas → PMF          ~90s   ica|CSV
+    simulacion  = TRUE,  # Simulación 10a con cortas → PMF          ~90s   ica|CSV
+    tablas      = TRUE   # Tablas 5-9, ICA, densidad esp. → LaTeX   ~30s   ica+simulacion|CSVs
   )
   # ══════════════════════════════════════════════════════════════════════════════
 
@@ -233,6 +234,48 @@
     cat("\n[FASE 5 omitida] Simulación con cortas no ejecutada.\n")
   }
   
+  # ==============================================================================
+  # FASE 6: GENERADORES DE TABLAS PMF
+  # ==============================================================================
+
+  if (FASES$tablas) {
+
+    cat("\n╔════════════════════════════════════════════════════════════╗\n")
+    cat("║           FASE 6: GENERADORES DE TABLAS PMF               ║\n")
+    cat("╚════════════════════════════════════════════════════════════╝\n")
+
+    # 53_TABLA_DENSIDAD_ESPECIES usa la variable 'arboles', no 'arboles_analisis'
+    arboles <- arboles_analisis
+
+    cat("\n[6.1] Tabla densidad por especie (Rodal / Sitio)...\n")
+    source(file.path(PROYECTO_ROOT, "generadores/53_TABLA_DENSIDAD_ESPECIES.R"))
+
+    cat("\n[6.2] Tabla ICA y posibilidad por UMM y género...\n")
+    source(file.path(PROYECTO_ROOT, "generadores/Tabla_ICA_Posibilidad.R"))
+
+    cat("\n[6.3] Tabla 5 — Existencias por UMM...\n")
+    # TABLA_5 espera 'cortas' con rodal_cortado + ano_corta en el environment
+    cortas <- read_csv("resultados/cortas_distribucion_diametrica.csv", show_col_types = FALSE)
+    source(file.path(PROYECTO_ROOT, "generadores/TABLA_5_COMPLETA_CON_ICA.R"))
+
+    cat("\n[6.4] Tabla 6 — Resumen existencias predio...\n")
+    source(file.path(PROYECTO_ROOT, "generadores/TABLA_6.R"))
+
+    cat("\n[6.5] Tabla 7 — Densidad e incrementos (NOM-152)...\n")
+    source(file.path(PROYECTO_ROOT, "generadores/TABLA_7_densidad e incrementos.R"))
+
+    cat("\n[6.6] Tablas 8 y 9 — Posibilidad e infraestructura...\n")
+    source(file.path(PROYECTO_ROOT, "generadores/TABLA_8 y 9 - Posibilidad Infraestructura.R"))
+
+    cat("\n[6.7] Tabla Anexa — Distribución diamétrica de cortas por UMM...\n")
+    source(file.path(PROYECTO_ROOT, "generadores/TABLA ANEXA - DISTRIBUCIÓN DIAMÉTRICA DE CORTAS POR UMM.R"))
+
+    cat("\n✓ Todas las tablas PMF generadas\n")
+
+  } else {
+    cat("\n[FASE 6 omitida] Tablas PMF no regeneradas.\n")
+  }
+
   # ==============================================================================
   # RESUMEN FINAL
   # ==============================================================================
