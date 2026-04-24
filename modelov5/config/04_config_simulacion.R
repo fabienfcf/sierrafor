@@ -139,7 +139,13 @@ crear_configuracion_simulacion <- function() {
     # MUESTREO
     # ══════════════════════════════════════════════════════════════
     area_parcela_ha = AREA_PARCELA_HA,
-    area_parcela_regeneracion_ha = AREA_REGENERACION_M2/10000
+    area_parcela_regeneracion_ha = AREA_REGENERACION_M2/10000,
+
+    # ══════════════════════════════════════════════════════════════
+    # UMBRALES DE VALIDACIÓN BIOLÓGICA
+    # ══════════════════════════════════════════════════════════════
+    umbral_delta_d_max = 1.0,  # cm/año — warning si incremento diamétrico supera esto
+    umbral_delta_h_max = 0.8   # m/año  — warning si incremento en altura supera esto
    )
    
    return(config)

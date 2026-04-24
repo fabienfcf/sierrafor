@@ -93,15 +93,16 @@ calcular_incremento_altura <- function(arbol, incremento_d, config) {
     incremento_h_base <- config$crecimiento_h_default
   }
   
-  # AJUSTEMENT PAR DOMINANCE
+  # MODIFICADOR POR DOMINANCIA (desde CODIGOS_DOMINANCIA)
   # ══════════════════════════════════════════════════════════════
-  
-  factor_dom <- case_when(
-    arbol$dominancia %in% c(1, 2, 4) ~ 1.0,   # Dominante/Intermedio/Aislado
-    arbol$dominancia %in% c(3, 5) ~ 0.75,     # Codominante/Suprimido (corregido)
-    arbol$dominancia == 6 ~ 0.5,              # Suprimido severo
-    TRUE ~ 1.0
-  )
+
+  factor_dom <- config$modificadores_dominancia %>%
+    filter(codigo == arbol$dominancia) %>%
+    pull(factor_crecimiento_h)
+
+  if (length(factor_dom) == 0) {
+    factor_dom <- 1.0
+  }
   
   # AJUSTEMENT PAR DIAMÈTRE
   # ══════════════════════════════════════════════════════════════

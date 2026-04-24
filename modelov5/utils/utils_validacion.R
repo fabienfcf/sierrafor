@@ -17,7 +17,7 @@ library(tidyverse)
 
 #' @title Validar crecimiento aplicado
 #' @description Verifica que el crecimiento se aplicó correctamente
-validar_crecimiento <- function(arboles_antes, arboles_despues) {
+validar_crecimiento <- function(arboles_antes, arboles_despues, config = CONFIG) {
 
   cat("\n╔════════════════════════════════════════════════════════════╗\n")
   cat("║           VALIDACIÓN DE CRECIMIENTO APLICADO              ║\n")
@@ -60,12 +60,12 @@ validar_crecimiento <- function(arboles_antes, arboles_despues) {
   cat(sprintf("✓ Rango incremento altura:   [%.3f - %.3f] m\n",
               incrementos$delta_h_min, incrementos$delta_h_max))
 
-  if (incrementos$delta_d_max > 1.0) {
-    warning("⚠ Incremento diamétrico muy alto (>1 cm/año)")
+  if (incrementos$delta_d_max > config$umbral_delta_d_max) {
+    warning(sprintf("⚠ Incremento diamétrico muy alto (>%.1f cm/año)", config$umbral_delta_d_max))
   }
 
-  if (incrementos$delta_h_max > 0.8) {
-    warning("⚠ Incremento altura muy alto (>0.8 m/año)")
+  if (incrementos$delta_h_max > config$umbral_delta_h_max) {
+    warning(sprintf("⚠ Incremento altura muy alto (>%.1f m/año)", config$umbral_delta_h_max))
   }
 
   # Verificar que muertos no crecieron
