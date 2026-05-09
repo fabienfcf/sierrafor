@@ -381,17 +381,17 @@ calcular_variables_114_rodal <- function(inicial, final, años, config, arboles_
       VC_ha_m3 = IntCor_rel_IC * ER_m3_ha,  # mÂ³/ha
       VC_rodal_m3 = VC_ha_m3 * superficie_corta_ha,  # âœ… Escalar por sup. aprovechable
       
-      # Existencias reales totales (para referencia)
-      ER_rodal_total_m3 = ER_m3_ha * superficie_total_ha,  # Volumen total del rodal
-      ER_rodal_aprovechable_m3 = ER_m3_ha * superficie_corta_ha  # Vol. en zona aprovechable
+      # ER usa superficie total; VC usa superficie aprovechable (sin ribereñas)
+      ER_rodal_m3 = ER_m3_ha * superficie_total_ha,
+      ER_rodal_total_m3 = ER_rodal_m3
     ) %>%
-    select(rodal, 
+    select(rodal,
            Sup_ha = superficie_corta_ha,
            superficie_total_ha,
-           ER_m3_ha, ICA_m3_ha, ICA_rel_i, 
-           ciclo_corta, IntCor_rel_IC, VC_ha_m3, 
-           ER_rodal_m3 = ER_rodal_aprovechable_m3,
-           ER_rodal_total_m3, 
+           ER_m3_ha, ICA_m3_ha, ICA_rel_i,
+           ciclo_corta, IntCor_rel_IC, VC_ha_m3,
+           ER_rodal_m3,
+           ER_rodal_total_m3,
            VC_rodal_m3)
   
   return(comparacion)
@@ -446,13 +446,13 @@ calcular_variables_114_genero_rodal <- function(inicial, final, años, config, a
                              1 - 1/((1 + ICA_rel_i)^ciclo_corta),
                              0),
       VC_ha_m3 = IntCor_rel_IC * ER_m3_ha,
-      # âœ… Usar superficie aprovechable para volúmenes totales
-      ER_rodal_m3 = ER_m3_ha * superficie_corta_ha,
+      # ER usa superficie total; VC usa superficie aprovechable (sin ribereñas)
+      ER_rodal_m3 = ER_m3_ha * superficie_total_ha,
       VC_rodal_m3 = VC_ha_m3 * superficie_corta_ha
     ) %>%
-    select(rodal, genero, 
-           Sup_ha = superficie_corta_ha,  # âœ… Devolver superficie aprovechable
-           superficie_total_ha,            # Mantener para referencia
+    select(rodal, genero,
+           Sup_ha = superficie_corta_ha,
+           superficie_total_ha,
            ER_m3_ha, ICA_m3_ha, ICA_rel_i,
            ciclo_corta, IntCor_rel_IC, VC_ha_m3,
            ER_rodal_m3, VC_rodal_m3)
@@ -548,13 +548,13 @@ calcular_variables_114_especie_rodal <- function(arboles_inicial, arboles_final,
                              1 - 1/((1 + ICA_rel_i)^ciclo_corta),
                              0),
       VC_ha_m3 = IntCor_rel_IC * ER_m3_ha,
-      # âœ… Usar superficie aprovechable para volúmenes totales
-      ER_rodal_m3 = ER_m3_ha * superficie_corta_ha,
+      # ER usa superficie total; VC usa superficie aprovechable (sin ribereñas)
+      ER_rodal_m3 = ER_m3_ha * superficie_total_ha,
       VC_rodal_m3 = VC_ha_m3 * superficie_corta_ha
     ) %>%
-    select(rodal, genero, especie, 
-           Sup_ha = superficie_corta_ha,  # âœ… Devolver superficie aprovechable
-           superficie_total_ha,            # Mantener para referencia
+    select(rodal, genero, especie,
+           Sup_ha = superficie_corta_ha,
+           superficie_total_ha,
            ER_m3_ha, ICA_m3_ha, ICA_rel_i,
            ciclo_corta, IntCor_rel_IC, VC_ha_m3,
            ER_rodal_m3, VC_rodal_m3)

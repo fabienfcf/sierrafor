@@ -1,542 +1,618 @@
-# SIERRAFOR - Sistema de Simulación Forestal
+# SIERRAFOR — Sistema de Simulación Forestal
+### PMF Las Alazanas · Ciclo 2026–2036
 
-**Sistema de Crecimiento, Reclutamiento y Mortalidad para Bosques de Pino-Encino**
-
-Desarrollado para bosques de montaña del noreste de México. Permite calcular e inferir las principales variables necesarias para la implementación de un Programa de Manejo Forestal según la NOM-152-SEMARNAT-2006.
-
----
-
-## 📋 Tabla de Contenidos
-
-- [Descripción General](#descripción-general)
-- [Estructura del Proyecto](#estructura-del-proyecto)
-- [Módulos Principales](#módulos-principales)
-- [Modelo de Simulación](#modelo-de-simulación)
-- [Instalación y Uso](#instalación-y-uso)
-- [Flujo de Trabajo](#flujo-de-trabajo)
-- [Salidas y Resultados](#salidas-y-resultados)
-- [Cambios Recientes](#cambios-recientes)
+Sistema individual-árbol en R para calcular crecimiento, mortalidad, reclutamiento y programas de corta en bosques mixtos de pino-encino. Genera todas las tablas y gráficos requeridos por la NOM-152-SEMARNAT-2006.
 
 ---
 
-## 📖 Descripción General
+## Inicio Rápido
 
-SIERRAFOR es un sistema modular en R para la simulación del crecimiento forestal y optimización de programas de corta. El sistema implementa:
+```r
+# Desde RStudio o R, con el directorio apuntando a modelov5/
+source("workflows/40_WORKFLOW_COMPLETO.R")
+```
 
-- **Modelos de crecimiento individual** basados en tasas diferenciales por género y dominancia
-- **Modelo de mortalidad** con tasas ajustadas por clase de dominancia
-- **Modelo de reclutamiento** que simula el ingreso de nuevos árboles
-- **Optimizador de cortas** basado en el método Liocourt (distribución balanceada)
-- **Cálculo de ICA** (Incremento Corriente Anual) y sostenibilidad
-
-### Características Principales
-
-✅ **Arquitectura modular refactorizada** - Código limpio sin duplicaciones
-✅ **Funciones compartidas** - Utilidades centralizadas para validación y cálculos
-✅ **Compatible con SIPLAFOR** - Usa códigos oficiales de dominancia, sanidad, erosión
-✅ **Método ICA-Liocourt** - Cortas basadas en crecimiento real, no en metas arbitrarias
-✅ **Reproducible** - Semillas fijas para simulaciones estocásticas
+Eso es todo. El script corre las 6 fases, genera ~40 tablas LaTeX, ~15 gráficos PNG y los CSVs de respaldo. Si quieres saltar fases costosas (p.ej. ya corriste la simulación), lee la sección [Control de Fases](#control-de-fases).
 
 ---
 
-## 📁 Estructura del Proyecto
+## Tabla de Contenidos
 
-### Archivos de Configuración
-
-| Archivo | Descripción |
-|---------|-------------|
-| `01_parametros_configuracion.R` | Carga centralizada de toda la configuración |
-| `02_config_especies.R` | Catálogo de especies, ecuaciones alométricas y parámetros h-d |
-| `03_config_codigos.R` | Códigos SIPLAFOR (dominancia, sanidad, erosión, etc.) |
-| `04_config_simulacion.R` | Parámetros de simulación (mortalidad, reclutamiento, periodo) |
-| `05_config_programa_cortas.R` | Calendario de intervenciones y parámetros de corta |
-
-### Módulos Core
-
-| Archivo | Descripción |
-|---------|-------------|
-| `15_core_calculos.R` | Funciones puras para cálculos dasométricos (volumen, área basal, filtros) |
-| `utils_validacion.R` | **NUEVO** - Funciones de validación compartidas |
-| `utils_metricas.R` | **NUEVO** - Cálculo de métricas sin duplicación |
-
-### Modelos de Simulación
-
-| Archivo | Descripción |
-|---------|-------------|
-| `10_modelos_crecimiento.R` | Incremento diamétrico y altura por árbol individual |
-| `11_modelo_mortalidad.R` | Aplicación de mortalidad con probabilidades diferenciales |
-| `12_modelo_reclutamiento.R` | Ingreso de nuevos árboles según composición actual |
-| `13_simulador_crecimiento.R` | Simulador principal que integra los 3 procesos |
-| `14_optimizador_cortas.R` | Optimización de cortas según método Liocourt |
-| `16_calcular_ica.R` | Cálculo del Incremento Corriente Anual |
-
-### Flujos de Trabajo
-
-| Archivo | Descripción |
-|---------|-------------|
-| `00_importar_inventario.R` | Importación de datos desde Excel |
-| `20_analisis_descriptivo.R` | Estadísticas y tablas descriptivas del inventario |
-| `30_SIMULACION_10AÑOS_COMPLETA.R` | Simulación completa de 10 años con cortas |
-| `40_WORKFLOW_COMPLETO.R` | **Punto de entrada principal** |
-| `41_WORKFLOW_calcular_ica.r` | Flujo para calcular ICA específicamente |
-
-### Análisis y Reportes
-
-| Archivo | Descripción |
-|---------|-------------|
-| `31_stat x rodal.R` | Estadísticas por rodal |
-| `32_tablas_pmf.R` | Generación de tablas para PMF (LaTeX) |
-| `33_graficos_pmf.R` | Gráficos para PMF |
-| `35_GENERAR_REPORTE_PMF.R` | Generación automática de reporte |
+1. [¿Qué hace este sistema?](#1-qué-hace-este-sistema)
+2. [Requisitos](#2-requisitos)
+3. [Estructura de carpetas](#3-estructura-de-carpetas)
+4. [Datos de entrada](#4-datos-de-entrada)
+5. [Control de Fases](#5-control-de-fases)
+6. [Configuración](#6-configuración)
+7. [Cómo funciona la simulación](#7-cómo-funciona-la-simulación)
+8. [Archivos generados](#8-archivos-generados)
+9. [Módulos avanzados](#9-módulos-avanzados)
+10. [Preguntas frecuentes](#10-preguntas-frecuentes)
 
 ---
 
-## 🧩 Módulos Principales
+## 1. ¿Qué hace este sistema?
 
-### 1. Módulo de Crecimiento (`10_modelos_crecimiento.R`)
+SIERRAFOR simula el crecimiento de cada árbol del inventario año por año durante 10 años. En cada ciclo anual aplica tres procesos biológicos:
 
-**Funciones principales:**
-- `calcular_incremento_diametro(arbol, config)` - Incremento anual en diámetro
-- `calcular_incremento_altura(arbol, incremento_d, config)` - Incremento en altura (proporcional a dh/dd)
-- `aplicar_crecimiento_anual(arbol, config)` - Aplica crecimiento a un árbol individual
-- `aplicar_crecimiento_poblacion(arboles_df, config, año)` - Aplica a toda la población
-
-**Parámetros de crecimiento:**
-```r
-CONFIG$crecimiento_base <- list(
-  Pinus = 0.40,    # cm/año
-  Quercus = 0.28,
-  Juniperus = 0.25,
-  Arbutus = 0.30,
-  Otros = 0.30
-)
+```
+Cada año:
+  ┌─────────────────────────────────┐
+  │  1. Crecimiento                 │  Cada árbol vivo crece en diámetro y altura
+  │  2. Mortalidad natural          │  Algunos árboles mueren (más los suprimidos)
+  │  3. Reclutamiento               │  Nuevos árboles ingresan a la clase mínima
+  └─────────────────────────────────┘
+       ↓ (si hay corta programada ese año)
+  ┌─────────────────────────────────┐
+  │  4. Programa de cortas          │  Extracción según método Liocourt + ICA
+  └─────────────────────────────────┘
 ```
 
-**Modificadores por dominancia:**
-```r
-# Dominante (1):     factor = 1.00
-# Codominante (2):   factor = 0.90
-# Intermedio (3):    factor = 0.75
-# Suprimido (6):     factor = 0.40
-# Muertos (7,8,9):   factor = 0.00 (no crecen)
-```
+Con los resultados calcula:
 
-### 2. Módulo de Mortalidad (`11_modelo_mortalidad.R`)
-
-**Funciones principales:**
-- `calcular_probabilidad_muerte(arbol, config)` - Probabilidad anual de mortalidad
-- `aplicar_mortalidad_arbol(arbol, config, valor_aleatorio)` - Decide si un árbol muere
-- `aplicar_mortalidad_poblacion(arboles_df, config, año)` - Aplica a toda la población
-
-**Parámetros:**
-```r
-CONFIG$mortalidad_base <- 0.01  # 1% anual base
-
-# Modificadores por dominancia:
-# Dominante:     0.5× (0.5% anual)
-# Codominante:   0.7×
-# Intermedio:    1.0×
-# Suprimido:     2.0× (2% anual)
-```
-
-### 3. Módulo de Reclutamiento (`12_modelo_reclutamiento.R`)
-
-**Funciones principales:**
-- `calcular_n_reclutas(arboles_rodal, config)` - Número de reclutas según población viva
-- `calcular_composicion_reclutas(arboles_rodal, n_reclutas, config)` - Distribución por especie
-- `generar_reclutas(rodal_id, composicion, config, año)` - Genera árboles nuevos
-- `aplicar_reclutamiento(arboles_df, config, año)` - Aplica a toda la población
-
-**Parámetros:**
-```r
-CONFIG$tasa_reclutamiento <- 0.02  # 2% de la población viva
-CONFIG$reclut_d_min <- 7.5         # cm
-CONFIG$reclut_d_max <- 12.0        # cm
-CONFIG$reclut_dominancia <- 6      # Suprimido
-CONFIG$reclut_altura <- list(Pinus = 3.5, Quercus = 2.8, ...)
-```
-
-### 4. Simulador Integrado (`13_simulador_crecimiento.R`)
-
-**Función principal:**
-```r
-resultado <- simular_crecimiento_rodal(
-  arboles_inicial = arboles_df,
-  config = CONFIG,
-  años = 10
-)
-```
-
-**Ciclo anual de simulación:**
-```
-Para cada año (1 a 10):
-  1. Aplicar crecimiento
-  2. Actualizar volúmenes
-  3. Aplicar mortalidad
-  4. Aplicar reclutamiento
-  5. Guardar estado en historial
-```
-
-**Salidas:**
-- `poblacion_inicial` - Estado al inicio
-- `poblacion_final` - Estado después de N años
-- `historial` - Todos los árboles en cada año
-- `historial_metricas` - Métricas agregadas por año
-
-### 5. Optimizador de Cortas (`14_optimizador_cortas.R`)
-
-**Método Liocourt:**
-- Distribución balanceada: `N(d+1) = q × N(d)`
-- Q-factor define la forma de la distribución
-- Cortas solo en clases con exceso
-- Volumen cortado ≤ ICA (sostenibilidad garantizada)
-
-**Función principal:**
-```r
-resultado_corta <- optimizar_corta_rodal(
-  arboles_rodal,
-  config,
-  año_corta,
-  aplicar_corta = TRUE
-)
-```
+| Producto | Descripción |
+|----------|-------------|
+| ICA | Incremento Corriente Anual (m³/ha/año) por género y UMM |
+| Tiempo de paso | Años que tarda un árbol en subir una clase diamétrica |
+| Posibilidad | Volumen de corta sostenible por UMM y periodo |
+| Tablas NOM-152 | Tablas 5, 6, 7, 8 y 9 del PMF en formato LaTeX |
+| Distribución Liocourt | Estructura diamétrica de equilibrio |
+| Análisis descriptivo | Composición, sanidad, erosión, regeneración |
 
 ---
 
-## 🔄 Modelo de Simulación
+## 2. Requisitos
 
-### Ecuaciones Fundamentales
+### Software
 
-#### 1. Crecimiento Diamétrico
-```
-Δd = tasa_base[género] × factor_dominancia[dominancia]
-```
+- R ≥ 4.2
+- RStudio (recomendado)
 
-#### 2. Crecimiento en Altura
-```
-dh/dd = Chapman-Richards(d, especie, dominancia)
-Δh = (dh/dd) × Δd
-```
-
-#### 3. Volumen Individual
-Ecuaciones alométricas por especie:
-```
-Potencia: V = a × d^b × h^c
-Exponencial: V = exp(a + b×ln(d) + c×ln(h))
-```
-
-#### 4. Mortalidad
-```
-P(muerte) = mortalidad_base × factor_dominancia
-```
-
-#### 5. Reclutamiento
-```
-N_reclutas = N_vivos × tasa_reclutamiento
-Composición de reclutas = Composición actual del rodal
-```
-
-### Flujo de Simulación Detallado
-
-```
-AÑO 0 (Inventario Inicial)
-├─ Importar datos
-├─ Calcular volúmenes
-├─ Asignar ecuaciones alométricas
-└─ Estado inicial guardado
-
-PARA cada año t = 1 a 10:
-
-  ├─ CRECIMIENTO
-  │  ├─ Calcular Δd para cada árbol vivo
-  │  ├─ Calcular Δh según relación h-d
-  │  ├─ Actualizar d, h
-  │  └─ Recalcular volumen
-
-  ├─ MORTALIDAD
-  │  ├─ Calcular P(muerte) para cada vivo
-  │  ├─ Generar valor aleatorio ~ U(0,1)
-  │  ├─ Si U < P(muerte) → marcar como muerto (dom = 7)
-  │  └─ Registrar año de muerte
-
-  ├─ RECLUTAMIENTO
-  │  ├─ Contar N_vivos por rodal
-  │  ├─ Calcular N_reclutas = tasa × N_vivos
-  │  ├─ Determinar composición según inventario
-  │  ├─ Generar árboles con d ~ U(7.5, 12) cm
-  │  └─ Agregar a población
-
-  ├─ CORTAS (si año programado)
-  │  ├─ Calcular ICA
-  │  ├─ Calcular distribución Liocourt
-  │  ├─ Identificar excesos por clase diamétrica
-  │  ├─ Seleccionar árboles a cortar
-  │  ├─ Verificar: Vol_corta ≤ ICA
-  │  └─ Marcar árboles como cortados (dom = 8)
-
-  └─ Guardar estado del año
-```
-
----
-
-## 🚀 Instalación y Uso
-
-### Requisitos
+### Paquetes R
 
 ```r
-# Librerías necesarias
 install.packages(c(
-  "tidyverse",
-  "readxl",
-  "janitor",
-  "xtable",
-  "patchwork"
+  "tidyverse",   # Manipulación de datos y gráficos
+  "readxl",      # Lectura del inventario Excel
+  "janitor",     # Limpieza de nombres de columnas
+  "xtable",      # Exportación de tablas a LaTeX
+  "patchwork",   # Composición de gráficos
+  "openxlsx"     # Escritura de Excel (para tabla densidad)
 ))
 ```
 
-### Preparación de Datos
+### Archivos de datos obligatorios
 
-El inventario debe estar en formato Excel con las hojas:
-- `F01` - Información de sitios
-- `F02` - Regeneración
-- `F03` - Árboles individuales
-- `F04` - Virutas (incremento)
-- `F05` - Regeneración adicional
-- `F06` - Combustibles
+Deben estar en la raíz de `modelov5/`:
 
-Además, archivo CSV con estadísticas de muestreo: `UMM_stats.csv`
+| Archivo | Descripción |
+|---------|-------------|
+| `inventario_forestal.xlsx` | Inventario con hojas F01–F06 en formato SIPLAFOR |
+| `UMM_stats.csv` | Superficie y número de muestreos por UMM |
 
-### Ejecución Básica
+---
 
-```r
-# 1. Establecer directorio de trabajo
-setwd("/ruta/a/tu/proyecto")
+## 3. Estructura de Carpetas
 
-# 2. Ejecutar workflow completo
-source("modelov5/40_WORKFLOW_COMPLETO.R")
+```
+modelov5/
+│
+├── workflows/                   ← PUNTO DE ENTRADA
+│   ├── 40_WORKFLOW_COMPLETO.R  ← Script principal (corre todo)
+│   └── 41_WORKFLOW_calcular_ica.r  ← ICA standalone (ya integrado en 40)
+│
+├── config/                      ← Parámetros del modelo
+│   ├── 00_importar_inventario.R    Lee el Excel y construye las tablas F01-F06
+│   ├── 01_parametros_configuracion.R  Orquestador: carga los 4 configs y valida
+│   ├── 02_config_especies.R         Catálogo de especies, ecuaciones de volumen,
+│   │                                tasas de crecimiento diamétrico y altura
+│   ├── 03_config_codigos.R          Tablas de códigos SIPLAFOR (18 tablas)
+│   ├── 04_config_simulacion.R       Mortalidad, reclutamiento, clases diamétricas
+│   └── 05_config_programa_cortas.R  Q-factor, DMC, N_ref, intensidades por UMM
+│
+├── core/                        ← Motor de simulación
+│   ├── 10_modelos_crecimiento.R     Incremento Δd y Δh por árbol individual
+│   ├── 11_modelo_mortalidad.R       Probabilidad de muerte por dominancia
+│   ├── 12_modelo_reclutamiento.R    Ingreso de nuevos individuos
+│   ├── 13_simulador_crecimiento.R   Integra los 3 procesos en un loop anual
+│   ├── 14_optimizador_cortas.R      Selección de árboles según Liocourt + ICA
+│   ├── 15_core_calculos.R           Funciones puras (volumen, área basal, filtros)
+│   └── 16_calcular_ica.R            Simulación sin cortas → ICA y tiempo de paso
+│
+├── analisis/                    ← Análisis del inventario inicial
+│   ├── 20_analisis_descriptivo.R    Estadísticas dasométricas, sanidad, erosión
+│   ├── 21_ANALISIS_RESULTADOS_DETALLADO.R
+│   ├── 31_stat x rodal.R
+│   ├── Fichas.R                     Fichas PDF por sitio (mapa + fotos + tabla)
+│   ├── FichasUMM.R                  Fichas PDF por UMM
+│   └── ANÁLISIS DE REGENERACIÓN...R
+│
+├── simulaciones/
+│   └── 30_SIMULACION_10AÑOS_COMPLETA.R  Simulación con cortas → historial 10 años
+│
+├── generadores/                 ← Tablas y gráficos para el PMF
+│   ├── 53_TABLA_DENSIDAD_ESPECIES.R     Densidad por especie (rodal y sitio) → xlsx
+│   ├── Tabla_ICA_Posibilidad.R          ICA y posibilidad por UMM y género
+│   ├── TABLA_5_COMPLETA_CON_ICA.R       Tabla 5 NOM-152 — Existencias por UMM
+│   ├── TABLA_6.R                        Tabla 6 NOM-152 — Resumen predio
+│   ├── TABLA_7_densidad e incrementos.R Tabla 7 NOM-152 — Densidad e ICA
+│   ├── TABLA_8 y 9 - Posibilidad...R    Tablas 8-9 NOM-152 — Posibilidad anual
+│   ├── TABLA ANEXA - DISTRIBUCIÓN...R   Distribución diamétrica de cortas por UMM
+│   ├── 20_analisis_dasometrico_FINAL.R
+│   ├── 32_tablas_pmf.R
+│   ├── 33_graficos_pmf.R
+│   ├── 50_GENERADOR_TABLAS.R
+│   ├── 51_GENERADOR_GRAFICOS.R
+│   ├── 52_CALCULOS_ESPECIFICOS.R
+│   ├── 60_graficos_distrib_ini.R
+│   ├── 60_graficos_distrib_ini_fin_corta.R
+│   ├── 60_graficos_distrib_ini_fin_corta_V2.R
+│   └── 61_generar_tabla_descriptiva_sitios.R
+│
+├── utils/                       ← Funciones compartidas
+│   ├── utils_metricas.R             calcular_metricas() — densidad, AB, volumen/ha
+│   └── utils_validacion.R           Chequeos de crecimiento, mortalidad, reclutas
+│
+├── opcional/
+│   └── 23_Main_incendio.R           Riesgo de incendio (desactivado por defecto)
+│
+├── reportes/
+│   ├── 35_GENERAR_REPORTE_PMF.R
+│   └── 70_CONFIG_REPORTES.R
+│
+├── Calibracion/
+│   └── Calibracion_chapman.R        Ajuste de Chapman-Richards
+│
+├── tests/                       ← Verificación y regresión
+│   ├── baseline_output.md           Valores de referencia para detectar regresiones
+│   ├── 22_VERIFICACION_TABLAS_LATEX.R
+│   ├── TEST_INTEGRACION_TS_TC.R
+│   └── test_refactorizacion.R
+│
+├── datos_intermedios/           ← Generado automáticamente
+├── resultados/                  ← Generado automáticamente
+├── tablas_latex/                ← Generado automáticamente
+└── graficos/                    ← Generado automáticamente
 ```
 
-Este workflow ejecuta automáticamente:
-1. Carga de configuración
-2. Importación de inventario
-3. Construcción del dataset
-4. Análisis descriptivo
-5. Simulación de 10 años
-6. Generación de tablas y gráficos
+---
 
-### Ejecución Personalizada
+## 4. Datos de Entrada
+
+### `inventario_forestal.xlsx`
+
+Debe contener las siguientes hojas en formato SIPLAFOR:
+
+| Hoja | Contenido | Columnas clave |
+|------|-----------|----------------|
+| `F01` | Sitios de muestreo | rodal, muestreo, pendiente, exposición, erosión |
+| `F02` | Regeneración (conteo) | rodal, muestreo, especie, categoría |
+| `F03` | Árboles individuales | rodal, muestreo, especie, diámetro_normal, altura_total, dominancia |
+| `F04` | Virutas (incremento) | árbol_id, incremento_5años |
+| `F05` | Regeneración adicional | rodal, muestreo, especie, altura |
+| `F06` | Combustibles | rodal, muestreo, carga_fina, carga_gruesa |
+
+### `UMM_stats.csv`
+
+Una fila por UMM (rodal). Columnas mínimas:
+
+```
+id, SUPERFICIE, num_muestreos, ...
+```
+
+- `id` — número de rodal (entero)
+- `SUPERFICIE` — área de la UMM en hectáreas
+- `num_muestreos` — número de sitios de muestreo realizados (se usa como denominador fijo para expansión a hectárea)
+
+---
+
+## 5. Control de Fases
+
+Al inicio de `40_WORKFLOW_COMPLETO.R` hay un panel de control. Cambia `TRUE`/`FALSE` para decidir qué calcular en cada ejecución:
 
 ```r
-# Cargar configuración
-source("modelov5/01_parametros_configuracion.R")
-
-# Importar inventario
-source("modelov5/00_importar_inventario.R")
-inventario <- importar_inventario_completo(
-  ruta_archivo = "inventario_forestal.xlsx",
-  ruta_umm = "UMM_stats.csv"
+FASES <- list(
+  importar    = TRUE,  # Lee el Excel → arboles_analisis.rds       ~10s   necesita: Excel
+  descriptivo = TRUE,  # Estadísticas dasométricas del inventario   ~30s   necesita: importar o .rds
+  incendio    = FALSE, # Riesgo de incendio (combustibles)          ~5s    necesita: importar o .rds
+  ica         = TRUE,  # Simulación sin cortas → ICA CSV            ~60s   necesita: importar o .rds
+  simulacion  = TRUE,  # Simulación con cortas → PMF               ~90s   necesita: ica o CSV en disco
+  tablas      = TRUE   # Tablas 5-9, ICA, densidad → LaTeX          ~30s   necesita: ica+simulacion o CSVs
 )
+```
 
-# Construir dataset
-source("modelov5/15_core_calculos.R")
-arboles <- construir_arboles_analisis(inventario, CONFIG)
+### Escenarios comunes
 
-# Simular 10 años
-source("modelov5/10_modelos_crecimiento.R")
-source("modelov5/11_modelo_mortalidad.R")
-source("modelov5/12_modelo_reclutamiento.R")
-source("modelov5/13_simulador_crecimiento.R")
+**Primera vez o cuando cambia el inventario:**
+```r
+# Corre todo (valores por defecto)
+FASES <- list(importar=TRUE, descriptivo=TRUE, incendio=FALSE,
+              ica=TRUE, simulacion=TRUE, tablas=TRUE)
+```
 
-resultado <- simular_crecimiento_rodal(
-  arboles_inicial = arboles,
+**Solo regenerar las tablas finales** (ya tienes los CSVs en `resultados/`):
+```r
+FASES <- list(importar=FALSE, descriptivo=FALSE, incendio=FALSE,
+              ica=FALSE, simulacion=FALSE, tablas=TRUE)
+```
+
+**Solo recalcular el ICA y las tablas** (cambiaste parámetros de crecimiento):
+```r
+FASES <- list(importar=FALSE, descriptivo=FALSE, incendio=FALSE,
+              ica=TRUE, simulacion=TRUE, tablas=TRUE)
+```
+
+**Solo el análisis descriptivo** (cambió el inventario, quieres ver estadísticas rápido):
+```r
+FASES <- list(importar=TRUE, descriptivo=TRUE, incendio=FALSE,
+              ica=FALSE, simulacion=FALSE, tablas=FALSE)
+```
+
+> **Nota:** Si desactivas `ica=FALSE` y también `simulacion=TRUE`, el sistema verifica que exista `resultados/31_ica_por_rodal.csv` y detiene con un mensaje claro si no existe.
+
+---
+
+## 6. Configuración
+
+Todos los parámetros del modelo están en la carpeta `config/`. El objeto `CONFIG` centraliza todo.
+
+### 6.1 Parámetros de crecimiento (`config/02_config_especies.R`)
+
+```r
+CRECIMIENTO_DIAMETRICO <- tribble(
+  ~genero,    ~tasa_base_cm_año,  ~tasa_altura_m_año,  ~altura_max_m,
+  "Pinus",    0.40,               0.20,                 22,
+  "Quercus",  0.25,               0.15,                 17
+)
+```
+
+- **tasa_base_cm_año** — crecimiento diamétrico promedio (cm/año) para un árbol dominante
+- **tasa_altura_m_año** — crecimiento en altura base (m/año)
+- **altura_max_m** — techo biológico; por encima no crece en altura
+
+El crecimiento real de cada árbol se ajusta multiplicando por el factor de su clase de dominancia:
+
+| Dominancia | Factor diamétrico | Factor altura |
+|------------|-------------------|---------------|
+| 1 — Dominante | 1.00 | 1.00 |
+| 2 — Intermedio | 0.80 | 1.00 |
+| 3 — Suprimido | 0.60 | 0.75 |
+| 4 — Libre sin supresión | 1.00 | 1.00 |
+| 5 — Libre con supresión | 0.70 | 0.75 |
+| 6 — Aislado con piso alto | 0.50 | 0.50 |
+| 7, 8, 9 — Muertos/tocones | 0.00 | 0.00 |
+
+### 6.2 Mortalidad (`config/04_config_simulacion.R`)
+
+```r
+MORTALIDAD_BASE <- 0.005  # 0.5% anual para árboles dominantes
+```
+
+Los suprimidos mueren hasta 1.2× más rápido (ver `factor_mortalidad` en `CODIGOS_DOMINANCIA`).
+
+### 6.3 Reclutamiento (`config/04_config_simulacion.R`)
+
+```r
+TASA_RECLUTAMIENTO   <- 0.01   # 1% de los vivos ingresa por año
+RECLUTAMIENTO_D_MIN  <- 7.5    # cm — diámetro mínimo de ingreso
+RECLUTAMIENTO_D_MAX  <- 8.5    # cm
+RECLUTAMIENTO_DOMINANCIA <- 3  # ingresan como suprimidos
+```
+
+### 6.4 Programa de cortas (`config/05_config_programa_cortas.R`)
+
+```r
+Q_FACTOR              <- 1.5   # Cociente de Liocourt (estructura objetivo)
+TOLERANCIA_EQUILIBRIO <- 20    # ±20% — margen de equilibrio aceptado
+DMC <- list(Pinus = 20, Quercus = 2)   # Diámetro Mínimo de Corta (cm)
+```
+
+El `N_REF` (número de referencia en la clase de 40 cm) y el `año_corta` de cada UMM se definen manualmente en `PROGRAMA_CORTAS` para que el técnico los ajuste a la realidad del predio.
+
+---
+
+## 7. Cómo funciona la simulación
+
+### 7.1 El ciclo anual
+
+Para cada año del periodo (2026–2035) el simulador:
+
+```
+1. CRECIMIENTO
+   Para cada árbol vivo:
+     Δd = tasa_base[género] × factor_dominancia
+     Δh = tasa_altura[género] × factor_dom_h × factor_tamaño
+     Se actualiza diámetro, altura, volumen y área basal
+
+2. MORTALIDAD NATURAL
+   Para cada árbol vivo:
+     P(muerte) = mortalidad_base × factor_mortalidad[dominancia]
+     Se sortea un U(0,1); si U < P → árbol muere (dominancia = 7)
+
+3. RECLUTAMIENTO
+   Por rodal:
+     n_reclutas = round(n_vivos × tasa_reclutamiento)
+     Se generan árboles nuevos con d ~ U(7.5, 8.5) cm
+     La composición de géneros sigue la del rodal
+
+4. CORTAS (solo en el año programado para cada UMM)
+   Se calcula la distribución Liocourt objetivo con Q y N_ref
+   Se identifican clases diamétricas con exceso de individuos
+   Se extraen árboles hasta acercarse al equilibrio
+   Restricción: solo árboles con d ≥ DMC del género
+```
+
+### 7.2 El método Liocourt (optimizador de cortas)
+
+La distribución de equilibrio dice que el número de árboles en cada clase debe ser:
+
+```
+N(clase k) = N_ref × Q^(-(k - k_ref))
+```
+
+Donde `k_ref` es la clase de referencia (40 cm por defecto). Si una clase tiene más árboles que la distribución objetivo (±tolerancia), los excedentes son candidatos a corta.
+
+El volumen cortado nunca supera el ICA del rodal para garantizar sostenibilidad.
+
+### 7.3 El ICA (Incremento Corriente Anual)
+
+El ICA se calcula con una simulación paralela sin cortas durante 10 años:
+
+```
+ICA [m³/ha/año] = (Volumen_final − Volumen_inicial) / (n_años × superficie_ha)
+```
+
+Esto incluye crecimiento de los árboles existentes, más el volumen de los reclutas que ingresan, menos las pérdidas por mortalidad natural.
+
+---
+
+## 8. Archivos Generados
+
+Después de correr el workflow completo encontrarás:
+
+### 8.1 Datos intermedios (`datos_intermedios/`)
+
+| Archivo | Descripción |
+|---------|-------------|
+| `arboles_analisis.rds` | Dataset principal: un árbol por fila con todas las variables calculadas |
+| `inventario_completo.rds` | Listas F01–F06 tal como vienen del Excel |
+
+### 8.2 Resultados (`resultados/`)
+
+**Del análisis descriptivo:**
+
+| Archivo | Contenido |
+|---------|-----------|
+| `analisis_descriptivo.rds` | Todos los resultados descriptivos en una lista |
+| `desc_01_resumen_general.csv` | Resumen global del predio |
+| `desc_02_por_rodal.csv` | Métricas por UMM |
+| `desc_03_por_genero.csv` | Métricas por género |
+| `desc_05_distribucion_diametrica.csv` | Histograma de clases |
+| `desc_06_erosion.csv` | Índice de erosión por sitio |
+| `desc_07/08_sanidad.csv` | Infestación de muérdago y descortezadores |
+| `desc_09/10_regeneracion.csv` | Densidad y composición de regeneración |
+
+**Del ICA (FASE 4.5):**
+
+| Archivo | Contenido |
+|---------|-----------|
+| `31_ica_por_rodal.csv` | ICA total por UMM |
+| `31_ica_por_genero_rodal.csv` | ICA por género y UMM ← usado por Tablas 6-9 |
+| `31_ica_por_especie_rodal.csv` | ICA por especie y UMM |
+| `31_tiempo_paso_rodal.csv` | Años para subir una clase diamétrica |
+| `31_resumen_predio.csv` | ICA y crecimiento a nivel predio |
+
+**De la simulación con cortas (FASE 5):**
+
+| Archivo | Contenido |
+|---------|-----------|
+| `evolucion_rodal_10anos.csv` | Métricas anuales por UMM y género ← usado por Tablas 5-7 |
+| `cortas_distribucion_diametrica.csv` | Árboles cortados por clase y UMM |
+| `cortas_resumen_rodal_genero.csv` | Resumen de cortas por UMM y género |
+| `cortas_detalle_completo.csv` | Un árbol cortado por fila |
+| `historial_completo_10anos.rds` | Estado completo de cada árbol en cada año |
+
+### 8.3 Tablas LaTeX (`tablas_latex/`)
+
+Listas para insertar en tu documento con `\input{tablas_latex/nombre.tex}`:
+
+**Análisis descriptivo:**
+
+| Archivo `.tex` | Tabla |
+|----------------|-------|
+| `desc_01_resumen_rodal.tex` | Resumen general por UMM |
+| `desc_02_composicion_genero.tex` | Composición Pinus/Quercus |
+| `desc_03_top_especies.tex` | Especies más abundantes |
+| `desc_04_erosion.tex` | Erosión por sitio |
+| `desc_05_sanidad.tex` | Sanidad forestal |
+| `desc_06_regeneracion.tex` | Regeneración natural |
+
+**Tablas NOM-152:**
+
+| Archivo `.tex` | Tabla |
+|----------------|-------|
+| `tabla_05_existencias_umm.tex` | Tabla 5 — Existencias por UMM |
+| `tabla_06_resumen_predio.tex` | Tabla 6 — Resumen a nivel predio |
+| `tabla_07_densidad_incrementos.tex` | Tabla 7 — Densidad e ICA |
+| `tabla_08_posibilidad_anual.tex` | Tabla 8 — Posibilidad anual |
+| `tabla_09_plan_cortas.tex` | Tabla 9 — Plan decenal de cortas |
+| `tabla_ica_posibilidad.tex` | ICA y posibilidad por UMM y género |
+| `tabla_anexa_distribucion_cortas.tex` | Distribución diamétrica de cortas |
+| `01_inventario_inicial.tex` | Inventario inicial consolidado |
+| `02_comparacion_inicial_final.tex` | Estado inicial vs final de la simulación |
+| `03_intensidad_corte_rodal.tex` | Intensidad de corta por UMM |
+
+**Del ICA:**
+
+| Archivo `.tex` | Tabla |
+|----------------|-------|
+| `ica_01_por_rodal.tex` | ICA total por UMM |
+| `ica_02_por_genero_rodal.tex` | ICA desglosado por género |
+| `ica_03_tiempo_paso.tex` | Tiempo de paso por género y UMM |
+| `ica_04_resumen_predio.tex` | ICA a nivel predio |
+
+### 8.4 Gráficos (`graficos/`)
+
+| Archivo `.png` | Gráfico |
+|----------------|---------|
+| `desc_01_distribucion_diametrica.png` | Histograma diamétrico inicial |
+| `desc_02_erosion.png` | Mapa de erosión |
+| `desc_03_sanidad.png` | Infestación por sitio |
+| `desc_04_regeneracion.png` | Densidad de regeneración |
+| `evolucion_10años_rodales.png` | Volumen/ha por UMM a lo largo del periodo |
+| `distrib_ini_fin_corta_*.png` | Distribuciones diamétricas inicio/fin con cortas |
+
+### 8.5 Excel de densidad por especie
+
+El script `53_TABLA_DENSIDAD_ESPECIES.R` genera dos pestañas en `inventario_forestal.xlsx`:
+
+- **Resumen_Especies** — densidad (N/ha) por especie y UMM, con subtotales por género
+- **Resumen_Sitios** — misma tabla pero por sitio de muestreo individual
+
+---
+
+## 9. Módulos Avanzados
+
+Esta sección es para quien quiera correr partes del sistema por separado o entender el código.
+
+### 9.1 Funciones core (disponibles siempre que se cargue `15_core_calculos.R`)
+
+```r
+# Filtrado de árboles
+es_arbol_vivo(dominancia)              # Devuelve TRUE/FALSE
+filtrar_arboles_vivos(df)              # Filtra filas vivas (dominancia 1-6)
+filtrar_arboles_muertos(df)            # Filtra filas muertas (dominancia 7-9)
+
+# Cálculos dasométricos
+calcular_volumen_arbol(d_cm, h_m, tipo, a, b, c)
+calcular_area_basal(d_cm)
+```
+
+### 9.2 Calcular métricas por grupo (`utils/utils_metricas.R`)
+
+```r
+source("utils/utils_metricas.R")
+
+# Genérico — agrupar_por puede ser cualquier vector de columnas
+calcular_metricas(arboles_df, agrupar_por = c("rodal", "genero_grupo"), config = CONFIG)
+
+# Atajos
+calcular_metricas_estado(arboles_df, config)          # Global
+calcular_metricas_por_genero(arboles_df, config)      # Por género
+calcular_metricas_por_especie(arboles_df, config)     # Por especie
+calcular_metricas_predio(arboles_df, config)          # Resumen predio
+```
+
+Las métricas incluyen: `n_arboles`, `densidad_ha`, `ab_m2ha`, `vol_m3ha`, `dg_cm`, `h_media_m`.
+
+### 9.3 Calcular ICA por separado (`core/16_calcular_ica.R`)
+
+```r
+source("core/10_modelos_crecimiento.R")
+source("core/11_modelo_mortalidad.R")
+source("core/12_modelo_reclutamiento.R")
+source("core/16_calcular_ica.R")
+
+resultado_ica <- calcular_ica_sin_cortes(
+  arboles_inicial = arboles_analisis,
   config = CONFIG,
   años = 10
 )
 
-# Ver resultados
-comparar_estados(resultado)
-comparar_estados_por_genero(resultado)
+# Exportar tablas LaTeX
+exportar_tablas_latex_ica(resultado_ica, directorio = "tablas_latex")
+
+# Guardar CSVs en resultados/
+guardar_resultados_ica(resultado_ica, directorio = "resultados")
 ```
 
----
-
-## 📊 Salidas y Resultados
-
-### Estructura de Archivos Generada
-
-```
-proyecto/
-├─ datos_intermedios/
-│  ├─ arboles_analisis.rds
-│  └─ inventario_completo.rds
-│
-├─ resultados/
-│  ├─ analisis_descriptivo.rds
-│  ├─ historial_completo_10años.rds
-│  ├─ metricas_10años.rds
-│  └─ registro_cortas.rds
-│
-├─ tablas_latex/
-│  ├─ desc_01_resumen_rodal.tex
-│  ├─ desc_02_composicion_genero.tex
-│  ├─ desc_03_top_especies.tex
-│  ├─ 01_inventario_inicial.tex
-│  ├─ 02_comparacion_inicial_final.tex
-│  ├─ 03_intensidad_corte_rodal.tex
-│  └─ ...
-│
-└─ graficos/
-   ├─ desc_01_distribucion_diametrica.png
-   ├─ desc_02_erosion.png
-   ├─ desc_03_sanidad.png
-   ├─ evolucion_10años_rodales.png
-   └─ ...
-```
-
-### Métricas Calculadas
-
-Para cada año y rodal:
-- **Población**: N° árboles vivos, densidad/ha
-- **Dimensiones**: Diámetro medio, altura media
-- **Volumen**: Total muestreado (m³), volumen/ha (m³/ha)
-- **Área basal**: Total muestreada (m²), área basal/ha (m²/ha)
-- **Incrementos**: Δd medio, Δh medio, ΔV total
-- **Mortalidad**: N° muertos, tasa (%)
-- **Reclutamiento**: N° reclutas, distribución por género
-- **Cortas**: N° cortados, volumen extraído, intensidad (%)
-
-### Gráficos Generados
-
-1. **Evolución temporal** (10 años):
-   - Volumen/ha por rodal
-   - Población total
-   - Diámetro medio
-
-2. **Distribución diamétrica**:
-   - Histograma por clase (5 cm)
-   - Por género (Pinus vs Quercus)
-   - Comparación inicial vs final
-
-3. **Análisis de cortas**:
-   - Distribución Liocourt (observada vs ideal)
-   - Intensidad de corta por clase diamétrica
-   - Excesos y defectos por clase
-
----
-
-## 🔄 Cambios Recientes - Refactorización
-
-### ✅ Eliminación de Código Duplicado
-
-**Antes:**
-- `validar_crecimiento()` duplicada en `10_modelos_crecimiento.R` y `13_simulador_crecimiento.R`
-- `validar_mortalidad()` duplicada
-- `validar_reclutamiento()` duplicada
-- `calcular_metricas_*()` triplicadas con lógica idéntica
-
-**Después:**
-- ✅ **Nuevo módulo** `utils_validacion.R` con todas las validaciones centralizadas
-- ✅ **Nuevo módulo** `utils_metricas.R` con función genérica de métricas
-- ✅ Todos los módulos ahora importan funciones compartidas
-- ✅ **~400 líneas de código eliminadas**
-
-### ✅ Limpieza de Archivos
-
-- ❌ Eliminado `20_analisis_descriptivo_old.R` (990 líneas duplicadas)
-- ✅ Eliminado código comentado sin uso
-- ✅ Estandarizado idioma de comentarios (español)
-- ✅ Simplificado mensajes de carga de módulos
-
-### ✅ Arquitectura Mejorada
-
-**Nueva estructura modular:**
-
-```
-CONFIG (configuración centralizada)
-  │
-  ├─ core_calculos.R (funciones puras)
-  ├─ utils_validacion.R (validaciones compartidas)
-  └─ utils_metricas.R (cálculos de métricas)
-       │
-       ├─ modelos_crecimiento.R
-       ├─ modelo_mortalidad.R
-       ├─ modelo_reclutamiento.R
-       └─ simulador_crecimiento.R
-```
-
-### Funciones Compartidas Nuevas
-
-#### `utils_validacion.R`
-```r
-validar_crecimiento(arboles_antes, arboles_despues)
-validar_mortalidad(arboles_antes, arboles_despues)
-validar_reclutamiento(arboles_antes, arboles_despues, config)
-```
-
-#### `utils_metricas.R`
-```r
-# Función genérica con agrupamiento flexible
-calcular_metricas(arboles_df, agrupar_por, config)
-
-# Wrappers para compatibilidad
-calcular_metricas_estado(arboles_df, config)
-calcular_metricas_por_genero(arboles_df, config)
-calcular_metricas_por_especie(arboles_df, config)
-```
-
-### Beneficios de la Refactorización
-
-1. **Mantenibilidad** - Un solo lugar para actualizar cada función
-2. **Consistencia** - Todas las validaciones usan la misma lógica
-3. **Menos errores** - No hay riesgo de versiones inconsistentes
-4. **Más simple** - Módulos más cortos y enfocados
-5. **Testeable** - Funciones compartidas fáciles de probar
-
----
-
-## 📝 Notas Técnicas
-
-### Reproducibilidad
-
-Las simulaciones usan semillas fijas:
-```r
-CONFIG$semilla_mortalidad <- 42
-set.seed(CONFIG$semilla_mortalidad + año_actual)
-```
-
-### Expansión a Hectárea
-
-El sistema diferencia claramente:
-- **Valores muestreados**: Medidos directamente en parcelas
-- **Valores/ha**: Expandidos usando factor = 1 / área_total_muestreada
+### 9.4 Simular solo crecimiento (sin cortas)
 
 ```r
-area_total <- area_parcela × n_muestreos
-valor_ha <- valor_muestreado × (1 / area_total)
+source("core/13_simulador_crecimiento.R")
+
+resultado <- simular_crecimiento_rodal(
+  arboles_inicial = arboles_analisis %>% filter(rodal == 3),
+  config = CONFIG,
+  años = 10
+)
+
+# Ver evolución
+resultado$historial_metricas   # Métricas por año
+resultado$poblacion_final       # Estado al año 10
 ```
 
-### Compatibilidad SIPLAFOR
+### 9.5 Ecuaciones de volumen
 
-Todos los códigos son compatibles con SIPLAFOR:
-- Dominancia (1-9)
-- Sanidad (1-5)
-- Erosión (0-3)
-- Vigor (1-3)
-- Y 15+ tablas adicionales
+El sistema usa ecuaciones alométricas por especie. Los tipos disponibles son:
+
+```r
+# Tipo "potencia":  V = a × d^b × h^c
+# Tipo "exp":       V = exp(a + b×ln(d) + c×ln(h))
+# Tipo "local":     V = a + b×d² (solo usa diámetro)
+```
+
+Los coeficientes `a`, `b`, `c` están en `config/02_config_especies.R` y se asignan a cada árbol al construir el dataset.
+
+### 9.6 Reproducibilidad de la mortalidad
+
+La mortalidad es estocástica. La semilla se fija por año:
+
+```r
+set.seed(CONFIG$semilla_mortalidad + año_actual)  # semilla = 42
+```
+
+Esto garantiza que la misma configuración siempre produce los mismos resultados. Para explorar variabilidad, cambia `SEMILLA_MORTALIDAD` en `config/04_config_simulacion.R`.
 
 ---
 
-## 📧 Soporte y Contribuciones
+## 10. Preguntas Frecuentes
 
-Para preguntas, sugerencias o reporte de errores, contactar al equipo de desarrollo.
+**¿Por qué los valores de densidad/ha no cambian aunque cambien el número de árboles muertos?**
+
+El sistema usa un denominador fijo para expandir a hectárea: el número de sitios de muestreo realizados en el inventario. Esto es metodológicamente correcto — el esfuerzo de muestreo no cambia con la simulación. Ver `utils/utils_metricas.R` para detalles.
+
+**¿Puedo cambiar los parámetros de crecimiento?**
+
+Sí, edita `config/02_config_especies.R`. Las tasas base (`tasa_base_cm_año`) y las alturas máximas (`altura_max_m`) se propagan automáticamente a todo el sistema vía `CONFIG`.
+
+**¿Puedo añadir una nueva UMM al programa de cortas?**
+
+Agrega una fila al tribble `PROGRAMA_CORTAS` en `config/05_config_programa_cortas.R` con el rodal, año de corta, N_ref, intensidad e información complementaria.
+
+**¿Qué pasa si el inventario cambia (nuevos muestreos)?**
+
+Pon el nuevo archivo `inventario_forestal.xlsx` en la raíz, activa `FASES$importar = TRUE` y corre el workflow. Todo se recalcula desde cero.
+
+**¿Los árboles muertos siguen en el dataset?**
+
+Sí, nunca se eliminan filas. Los muertos se marcan con `dominancia %in% c(7, 8, 9)` y todas las funciones de cálculo los excluyen automáticamente usando `filtrar_arboles_vivos()`. Esto permite rastrear la mortalidad acumulada.
+
+**¿Cómo incluyo las tablas en LaTeX?**
+
+```latex
+\input{tablas_latex/tabla_05_existencias_umm.tex}
+\input{tablas_latex/tabla_07_densidad_incrementos.tex}
+% etc.
+```
 
 ---
 
-## 📜 Licencia
+## Valores de referencia (baseline)
 
-Este proyecto está bajo licencia MIT. Ver archivo `LICENSE` para más detalles.
+Para detectar si algún cambio al código alteró los resultados, estos son los valores esperados con la configuración actual:
+
+| Métrica | Valor |
+|---------|-------|
+| Árboles en inventario | 2 119 |
+| Volumen inventario (vivos) | 437.30 m³ |
+| Árboles cortados (10 años) | 270 |
+| Volumen cortado total | 90.98 m³ |
+| ICA medio predio | ~2.17 m³/ha/año |
+
+Si corrés el workflow y los números difieren, compará con `tests/baseline_output.md`.
 
 ---
 
-**SIERRAFOR v2.0** - Sistema Refactorizado y Optimizado
-_Última actualización: Noviembre 2025_
+**SIERRAFOR v5** · PMF Las Alazanas 2026–2036  
+Actualizado: abril 2026
