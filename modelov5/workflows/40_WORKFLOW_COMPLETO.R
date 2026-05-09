@@ -28,14 +28,15 @@
   #   Fase              Qué hace                          Tiempo aprox  Requiere
   # ──────────────────────────────────────────────────────────────────────────────
   FASES <- list(
-    importar    = TRUE,  # Leer Excel → arboles_analisis.rds       ~10s   Excel
-    descriptivo = TRUE,  # Análisis dasométrico completo            ~30s   importar|.rds
-    incendio    = FALSE, # Riesgo de incendio (combustibles)        ~5s    importar|.rds
-    ica         = TRUE,  # Simulación 10a sin cortas → ICA CSV      ~60s   importar|.rds
-    simulacion  = TRUE,  # Simulación 10a con cortas → PMF          ~90s   ica|CSV
-    tablas      = TRUE,  # Tablas 5-9, ICA, densidad esp. → LaTeX   ~30s   ica+simulacion|CSVs
-    fichas      = FALSE, # Fichas PDF por sitio (catálogo)          ~120s  importar|.rds
-    fichas_umm  = FALSE  # Fichas PDF resumen por UMM               ~60s   importar|.rds
+    importar     = TRUE,  # Leer Excel → arboles_analisis.rds       ~10s   Excel
+    descriptivo  = TRUE,  # Análisis dasométrico completo            ~30s   importar|.rds
+    incendio     = FALSE, # Riesgo de incendio (combustibles)        ~5s    importar|.rds
+    ica          = TRUE,  # Simulación 10a sin cortas → ICA CSV      ~60s   importar|.rds
+    simulacion   = TRUE,  # Simulación 10a con cortas → PMF          ~90s   ica|CSV
+    tablas       = TRUE,  # Tablas 5-9, ICA, densidad esp. → LaTeX   ~30s   ica+simulacion|CSVs
+    graficos     = TRUE,  # Gráficos distrib. diamétrica por UMM     ~15s   simulacion|CSVs
+    fichas       = FALSE, # Fichas PDF por sitio (catálogo)          ~120s  importar|.rds
+    fichas_umm   = FALSE  # Fichas PDF resumen por UMM               ~60s   importar|.rds
   )
   # ══════════════════════════════════════════════════════════════════════════════
 
@@ -275,13 +276,22 @@
     cat("\n[6.7] Tabla Anexa — Distribución diamétrica de cortas por UMM...\n")
     source(file.path(PROYECTO_ROOT, "generadores/TABLA ANEXA - DISTRIBUCIÓN DIAMÉTRICA DE CORTAS POR UMM.R"))
 
-    cat("\n[6.8] Gráficos distribución diamétrica por UMM (inicial / corta / final)...\n")
-    source(file.path(PROYECTO_ROOT, "generadores/60_graficos_distrib_ini_fin_corta_V2.R"))
-
     cat("\n✓ Todas las tablas PMF generadas\n")
 
   } else {
     cat("\n[FASE 6 omitida] Tablas PMF no regeneradas.\n")
+  }
+
+  # FASE 6.5: GRÁFICOS DISTRIBUCIÓN DIAMÉTRICA POR UMM
+  # Requiere: simulacion|CSVs (historial_completo_10anos.rds, registro_cortas.rds)
+  # ──────────────────────────────────────────────────────────────────────────────
+  if (FASES$graficos) {
+    cat("\n╔════════════════════════════════════════════════════════════╗\n")
+    cat("║     FASE 6.5: GRÁFICOS DISTRIBUCIÓN DIAMÉTRICA            ║\n")
+    cat("╚════════════════════════════════════════════════════════════╝\n")
+    source(file.path(PROYECTO_ROOT, "generadores/60_graficos_distrib_ini_fin_corta_V2.R"))
+  } else {
+    cat("\n[FASE 6.5 omitida] Gráficos diamétricos no regenerados.\n")
   }
 
   # FASE 7: FICHAS PDF POR SITIO
