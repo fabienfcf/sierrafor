@@ -34,7 +34,8 @@
     ica         = TRUE,  # Simulación 10a sin cortas → ICA CSV      ~60s   importar|.rds
     simulacion  = TRUE,  # Simulación 10a con cortas → PMF          ~90s   ica|CSV
     tablas      = TRUE,  # Tablas 5-9, ICA, densidad esp. → LaTeX   ~30s   ica+simulacion|CSVs
-    fichas      = FALSE  # Fichas PDF por sitio (catálogo)          ~120s  importar|.rds
+    fichas      = FALSE, # Fichas PDF por sitio (catálogo)          ~120s  importar|.rds
+    fichas_umm  = FALSE  # Fichas PDF resumen por UMM               ~60s   importar|.rds
   )
   # ══════════════════════════════════════════════════════════════════════════════
 
@@ -287,6 +288,18 @@
     source(file.path(PROYECTO_ROOT, "analisis/Fichas.R"))
   } else {
     cat("\n[FASE 7 omitida] Fichas PDF no regeneradas.\n")
+  }
+
+  # FASE 8: FICHAS PDF RESUMEN POR UMM
+  # Requiere: importar|.rds  +  analisis_riesgo_incendio_completo.csv  +  fotos/mapas_umm
+  # ──────────────────────────────────────────────────────────────────────────────
+  if (FASES$fichas_umm) {
+    cat("\n╔════════════════════════════════════════════════════════════╗\n")
+    cat("║        FASE 8: FICHAS PDF RESUMEN POR UMM                 ║\n")
+    cat("╚════════════════════════════════════════════════════════════╝\n")
+    source(file.path(PROYECTO_ROOT, "analisis/FichasUMM.R"))
+  } else {
+    cat("\n[FASE 8 omitida] Fichas UMM no regeneradas.\n")
   }
 
   # ==============================================================================

@@ -9,7 +9,11 @@ suppressPackageStartupMessages({
   library(scales)
 })
 
-PROYECTO_ROOT <- "/home/fabien/Documents/CONAFOR/Consultoria/Las Alazanas/2025/PMF - 2026 - 2036/Inventario Forestal 102025/R5/modelov5"
+if (!exists("PROYECTO_ROOT"))
+  PROYECTO_ROOT <- "/home/fabien/Documents/CONAFOR/Consultoria/Las Alazanas/2025/PMF - 2026 - 2036/Inventario Forestal 102025/R5/modelov5"
+
+if (!exists("es_arbol_vivo"))
+  source(file.path(PROYECTO_ROOT, "core", "15_core_calculos.R"))
 
 # ==============================================================================
 # CONSTANTES
@@ -37,8 +41,11 @@ cod_lbl <- function(cod, tabla) {
 
 cat("Cargando datos...\n")
 
-arboles <- read.csv(file.path(PROYECTO_ROOT, "arboles_analisis.csv"),
-                    stringsAsFactors = FALSE) %>%
+if (!exists("arboles"))
+  arboles <- read.csv(file.path(PROYECTO_ROOT, "resultados", "arboles_analisis.csv"),
+                      stringsAsFactors = FALSE)
+
+arboles <- arboles %>%
   mutate(
     estado      = ifelse(!es_arbol_vivo(dominancia), "muerto", "vivo"),
     dano1_lbl   = cod_lbl(dano_fisico1, DANOS),
@@ -245,7 +252,7 @@ generar_ficha_umm <- function(umm) {
   # ---- Fotos: muestra aleatoria representativa (max 6, 2 por sitio max) -----
   fotos_por_sitio <- lapply(sitios_u, function(s) {
     fs <- list.files(file.path(tmp_dir, "fotos"),
-                     pattern = sprintf("^Sitio_%02d_", s),
+                     pattern = sprintf("^Sitio_%02d[_.]", s),
                      full.names = FALSE)
     if (length(fs) > 0) file.path("fotos", fs) else character(0)
   })
@@ -597,12 +604,13 @@ generar_ficha_umm <- function(umm) {
 
   # ---- Serie fotográfica -----------------------------------------------------
   foto_caption <- function(fname) {
-    # Sitio_01_Norte_a_Sur.jpg → "Sitio 1 — Norte a Sur"
-    base <- tools::file_path_sans_ext(basename(fname))
+    # Sitio_01_Norte_a_Sur.jpg → "Sitio 1 — Norte a Sur"; Sitio_34.jpg → "Sitio 34"
+    base  <- tools::file_path_sans_ext(basename(fname))
     parts <- strsplit(base, "_")[[1]]
-    num  <- as.integer(parts[2])
-    ori  <- paste(parts[-c(1, 2)], collapse = " ")
-    sprintf("Sitio %d --- %s", num, ori)
+    num   <- as.integer(parts[2])
+    rest  <- parts[-c(1, 2)]
+    if (length(rest) == 0) return(sprintf("Sitio %d", num))
+    sprintf("Sitio %d --- %s", num, paste(rest, collapse = " "))
   }
 
   if (length(fotos_sel) > 0) {
