@@ -275,6 +275,9 @@
     cat("\n[6.7] Tabla Anexa — Distribución diamétrica de cortas por UMM...\n")
     source(file.path(PROYECTO_ROOT, "generadores/TABLA ANEXA - DISTRIBUCIÓN DIAMÉTRICA DE CORTAS POR UMM.R"))
 
+    cat("\n[6.8] Gráficos distribución diamétrica por UMM (inicial / corta / final)...\n")
+    source(file.path(PROYECTO_ROOT, "generadores/60_graficos_distrib_ini_fin_corta_V2.R"))
+
     cat("\n✓ Todas las tablas PMF generadas\n")
 
   } else {

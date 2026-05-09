@@ -13,6 +13,7 @@ library(ggpattern)
 
 # Charger CONFIG pour area_parcela_ha
 source("config/01_parametros_configuracion.R")
+source("core/15_core_calculos.R")
 
 # Créer répertoires si nécessaire
 if (!dir.exists("graficos")) dir.create("graficos", recursive = TRUE)
@@ -628,5 +629,18 @@ cat("\nLÉGENDE GRAPHIQUE 2:\n")
 cat("  ■ Barres sólidas:        Residual (après coupe)\n")
 cat("  ▨ Barres rayées (negro): Cortado (mismo color, rayado fino 45°)\n")
 cat("  ─ ─ Ligne pointillée:    Courbe Liocourt idéale\n")
+
+# Copiar a LATEX/anexos/
+latex_anexos <- "/home/fabien/Documents/CONAFOR/Consultoria/Las Alazanas/2025/PMF - 2026 - 2036/LATEX/anexos"
+if (dir.exists(latex_anexos)) {
+  archivos_png <- c(
+    "graficos/densidad_diametrica_GLOBAL.png",
+    sprintf("graficos/densidad_diametrica_UMM_%02d.png", rodales)
+  )
+  for (f in archivos_png) {
+    if (file.exists(f)) file.copy(f, file.path(latex_anexos, basename(f)), overwrite = TRUE)
+  }
+  cat(sprintf("\n✓ Gráficos copiados a LATEX/anexos/ (%d archivos)\n", length(archivos_png)))
+}
 
 cat("\n")
