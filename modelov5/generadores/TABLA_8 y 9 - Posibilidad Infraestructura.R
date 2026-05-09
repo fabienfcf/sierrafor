@@ -75,10 +75,11 @@ posibilidad <- read_csv("resultados/cortas_resumen_rodal_genero.csv", show_col_t
   rename(rodal = rodal_cortado)
 
 # Superficie por UMM
-umm_stats <- read_csv("UMM_stats.csv", show_col_types = FALSE) %>%
+umm_stats <- read_csv("UMM_stats.csv", locale = locale(encoding = "latin1"), show_col_types = FALSE) %>%
   filter(id != 0) %>%  # ← Excluir UMM 0
-  select(id, SUPERFICIE) %>%
-  rename(rodal = id, superficie_ha = SUPERFICIE)
+  select(rodal = id,
+         superficie_ha = `SUPERFICIE UMM`,
+         superficie_corta_ha = `Superficie en Producción (ha)`)
 
 cat(sprintf("  ✓ Datos cargados (sin UMM 0)\n"))
 

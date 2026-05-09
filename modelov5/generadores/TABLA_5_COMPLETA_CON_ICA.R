@@ -19,9 +19,10 @@ cat("[1/5] Cargando datos...\n")
 evolucion <- read_csv("resultados/evolucion_rodal_10anos.csv", show_col_types = FALSE)
 
 # Cargar superficie por UMM desde UMM_stats.csv
-umm_stats <- read_csv("UMM_stats.csv", show_col_types = FALSE) %>%
-  select(id, SUPERFICIE) %>%
-  rename(rodal = id, superficie_ha = SUPERFICIE)
+umm_stats <- read_csv("UMM_stats.csv", locale = locale(encoding = "latin1"), show_col_types = FALSE) %>%
+  select(rodal = id,
+         superficie_ha = `SUPERFICIE UMM`,
+         superficie_corta_ha = `Superficie en Producción (ha)`)
 
 cat(sprintf("  ✓ Datos cargados\n"))
 
@@ -52,6 +53,7 @@ ano0_genero <- evolucion %>%
   transmute(
     rodal,
     superficie_ha,
+    superficie_corta_ha,
     # PINUS
     pinus_vol_ha = pinus_vol_ha_m3,
     pinus_vol_total = pinus_vol_ha_m3 * superficie_ha,
@@ -257,15 +259,15 @@ totales_genero_predio <- tabla5_data %>%
     pinus_ab_pond = pinus_ab_ha * superficie_ha,
     pinus_res_vol_pond = pinus_res_vol_ha * superficie_ha,
     pinus_res_ab_pond = pinus_res_ab_ha * superficie_ha,
-    pinus_pos_vol_pond = pinus_pos_vol_m3_ha * superficie_ha,
-    pinus_pos_ab_pond = pinus_pos_ab_ha * superficie_ha,
-    
+    pinus_pos_vol_pond = pinus_pos_vol_m3_ha * superficie_corta_ha,
+    pinus_pos_ab_pond = pinus_pos_ab_ha * superficie_corta_ha,
+
     quercus_vol_pond = quercus_vol_total,  # Ya está en m³ totales
     quercus_ab_pond = quercus_ab_ha * superficie_ha,
     quercus_res_vol_pond = quercus_res_vol_ha * superficie_ha,
     quercus_res_ab_pond = quercus_res_ab_ha * superficie_ha,
-    quercus_pos_vol_pond = quercus_pos_vol_m3_ha * superficie_ha,
-    quercus_pos_ab_pond = quercus_pos_ab_ha * superficie_ha
+    quercus_pos_vol_pond = quercus_pos_vol_m3_ha * superficie_corta_ha,
+    quercus_pos_ab_pond = quercus_pos_ab_ha * superficie_corta_ha
   ) %>%
   summarise(
     superficie_ha = superficie_total,

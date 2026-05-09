@@ -19,9 +19,10 @@ cat("[1/4] Cargando datos...\n")
 evolucion <- read_csv("resultados/evolucion_rodal_10anos.csv", show_col_types = FALSE)
 
 # Superficie por UMM
-umm_stats <- read_csv("UMM_stats.csv", show_col_types = FALSE) %>%
-  select(id, SUPERFICIE) %>%
-  rename(rodal = id, superficie_ha = SUPERFICIE)
+umm_stats <- read_csv("UMM_stats.csv", locale = locale(encoding = "latin1"), show_col_types = FALSE) %>%
+  select(rodal = id,
+         superficie_ha = `SUPERFICIE UMM`,
+         superficie_corta_ha = `Superficie en Producción (ha)`)
 
 # ICA para cálculo de posibilidad
 ica_data <- read_csv("resultados/31_ica_por_genero_rodal.csv", show_col_types = FALSE)
@@ -129,7 +130,7 @@ posibilidad_umm <- ica_data %>%
   left_join(umm_stats, by = "rodal") %>%
   mutate(
     # Convertir a m³ totales
-    posibilidad_m3 = posibilidad_m3_ha * superficie_ha
+    posibilidad_m3 = posibilidad_m3_ha * superficie_corta_ha
   )
 
 # Totales por género

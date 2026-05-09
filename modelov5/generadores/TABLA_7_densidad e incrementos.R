@@ -31,9 +31,10 @@ evolucion <- read_csv("resultados/evolucion_rodal_10anos.csv", show_col_types = 
   filter(ano_simulacion == 0)
 
 # Superficie por UMM
-umm_stats <- read_csv("UMM_stats.csv", show_col_types = FALSE) %>%
-  select(id, SUPERFICIE) %>%
-  rename(rodal = id, superficie_ha = SUPERFICIE)
+umm_stats <- read_csv("UMM_stats.csv", locale = locale(encoding = "latin1"), show_col_types = FALSE) %>%
+  select(rodal = id,
+         superficie_ha = `SUPERFICIE UMM`,
+         superficie_corta_ha = `Superficie en Producción (ha)`)
 
 # ICA por género (ya calculado)
 ica_data <- read_csv("resultados/31_ica_por_genero_rodal.csv", show_col_types = FALSE)
