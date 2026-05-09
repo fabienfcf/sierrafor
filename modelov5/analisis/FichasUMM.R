@@ -134,10 +134,10 @@ generar_graficos_umm <- function(umm, vivos) {
   grp <- function(g) case_when(
     g == "Pinus"   ~ "Pinus",
     g == "Quercus" ~ "Quercus",
-    TRUE           ~ "Otras"
+    TRUE           ~ "Otras esp."
   )
 
-  colores <- c("Pinus" = "#2E7D32", "Quercus" = "#E65100", "Otras" = "#1565C0")
+  colores <- c("Pinus" = "#2E7D32", "Quercus" = "#E65100", "Otras esp." = "#1565C0")
 
   # ---- Pie: volumen por grupo --------------------------------------------------
   vol_grp <- vivos %>%
@@ -451,10 +451,10 @@ generar_ficha_umm <- function(umm) {
   # Otras
   sp_o <- por_especie %>% filter(!genero %in% c("Pinus","Quercus"))
   if (nrow(sp_o) > 0) {
-    tex <- c(tex, "\\multicolumn{7}{@{}l}{\\textbf{Otras latifoliadas}} \\\\")
+    tex <- c(tex, "\\multicolumn{7}{@{}l}{\\textbf{Otras especies}} \\\\")
     for (i in seq_len(nrow(sp_o))) tex <- c(tex, fila_esp(sp_o[i,]))
-    if (nrow(sp_o) > 1 && !is.null(sub_o))
-      tex <- c(tex, fila_sub(sub_o, "Subtotal Otras"), "\\midrule")
+    if (!is.null(sub_o))
+      tex <- c(tex, fila_sub(sub_o, "Subtotal Otras especies"), "\\midrule")
   }
 
   # Total

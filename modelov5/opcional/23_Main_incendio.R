@@ -22,13 +22,14 @@ calcular_carga_combustibles <- function(df) {
     rowwise() %>%
     mutate(
       # Carga de combustibles finos (1 hora) en ton/ha
-      carga_1h = (combustibles_finos * k_1h) / L_1h,
-      
+      # NA = no se encontraron combustibles → 0 ton/ha
+      carga_1h = (coalesce(combustibles_finos, 0) * k_1h) / L_1h,
+
       # Carga de combustibles regulares (10 horas) en ton/ha
-      carga_10h = (combustibles_regulares * k_10h) / L_1h,
-      
+      carga_10h = (coalesce(combustibles_regulares, 0) * k_10h) / L_1h,
+
       # Carga de combustibles medianos (100 horas) en ton/ha
-      carga_100h = (combustibles_medianos * k_100h) / L_100h,
+      carga_100h = (coalesce(combustibles_medianos, 0) * k_100h) / L_100h,
       
       # Carga de combustibles gruesos (1000 horas) en ton/ha
       # Sumar diámetros al cuadrado de todas las piezas gruesas
@@ -120,12 +121,13 @@ calcular_riesgo_incendio <- function(df) {
         riesgo_pendiente + riesgo_continuidad + 
         riesgo_hojarasca + riesgo_apertura_dosel,
       
-      # Categoría de riesgo
+      # Categoría de riesgo (NA en índice = datos insuficientes → BAJO)
       categoria_riesgo = case_when(
-        indice_riesgo < 25 ~ "BAJO",
-        indice_riesgo < 50 ~ "MODERADO",
-        indice_riesgo < 75 ~ "ALTO",
-        TRUE ~ "EXTREMO"
+        is.na(indice_riesgo) ~ "BAJO",
+        indice_riesgo < 25   ~ "BAJO",
+        indice_riesgo < 50   ~ "MODERADO",
+        indice_riesgo < 75   ~ "ALTO",
+        TRUE                 ~ "EXTREMO"
       )
     ) %>%
     ungroup()
