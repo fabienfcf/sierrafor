@@ -107,9 +107,12 @@
                 paste(unique(arboles_analisis$genero_grupo), collapse = ", ")))
 
     dir.create("datos_intermedios", showWarnings = FALSE)
+    dir.create("resultados", showWarnings = FALSE)
     saveRDS(arboles_analisis, "datos_intermedios/arboles_analisis.rds")
     saveRDS(inventario, "datos_intermedios/inventario_completo.rds")
+    write.csv(arboles_analisis, "resultados/arboles_analisis.csv", row.names = FALSE)
     cat("\n✓ Datos guardados en datos_intermedios/\n")
+    cat(sprintf("  ✓ arboles_analisis.csv: %d árboles (todas las especies)\n", nrow(arboles_analisis)))
 
   } else {
     cat("\n[FASE 1+2 omitida] Cargando desde datos_intermedios/...\n")
