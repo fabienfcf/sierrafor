@@ -33,7 +33,8 @@
     incendio    = FALSE, # Riesgo de incendio (combustibles)        ~5s    importar|.rds
     ica         = TRUE,  # Simulación 10a sin cortas → ICA CSV      ~60s   importar|.rds
     simulacion  = TRUE,  # Simulación 10a con cortas → PMF          ~90s   ica|CSV
-    tablas      = TRUE   # Tablas 5-9, ICA, densidad esp. → LaTeX   ~30s   ica+simulacion|CSVs
+    tablas      = TRUE,  # Tablas 5-9, ICA, densidad esp. → LaTeX   ~30s   ica+simulacion|CSVs
+    fichas      = FALSE  # Fichas PDF por sitio (catálogo)          ~120s  importar|.rds
   )
   # ══════════════════════════════════════════════════════════════════════════════
 
@@ -274,6 +275,18 @@
 
   } else {
     cat("\n[FASE 6 omitida] Tablas PMF no regeneradas.\n")
+  }
+
+  # FASE 7: FICHAS PDF POR SITIO
+  # Requiere: importar|.rds  +  analisis_riesgo_incendio_completo.csv  +  fotos/mapas
+  # ──────────────────────────────────────────────────────────────────────────────
+  if (FASES$fichas) {
+    cat("\n╔════════════════════════════════════════════════════════════╗\n")
+    cat("║         FASE 7: FICHAS PDF POR SITIO (CATÁLOGO)           ║\n")
+    cat("╚════════════════════════════════════════════════════════════╝\n")
+    source(file.path(PROYECTO_ROOT, "analisis/Fichas.R"))
+  } else {
+    cat("\n[FASE 7 omitida] Fichas PDF no regeneradas.\n")
   }
 
   # ==============================================================================

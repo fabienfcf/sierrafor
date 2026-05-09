@@ -8,7 +8,11 @@ suppressPackageStartupMessages({
   library(readxl)
 })
 
-PROYECTO_ROOT <- "/home/fabien/Documents/CONAFOR/Consultoria/Las Alazanas/2025/PMF - 2026 - 2036/Inventario Forestal 102025/R5/modelov5"
+if (!exists("PROYECTO_ROOT"))
+  PROYECTO_ROOT <- "/home/fabien/Documents/CONAFOR/Consultoria/Las Alazanas/2025/PMF - 2026 - 2036/Inventario Forestal 102025/R5/modelov5"
+
+if (!exists("es_arbol_vivo"))
+  source(file.path(PROYECTO_ROOT, "core", "15_core_calculos.R"))
 
 # ==============================================================================
 # TABLAS DE CÓDIGOS
@@ -54,8 +58,9 @@ cod_lbl <- function(cod, tabla) {
 # ==============================================================================
 
 cat("Cargando datos...\n")
-arboles <- read.csv(file.path(PROYECTO_ROOT, "arboles_analisis.csv"),
-                    stringsAsFactors = FALSE)
+if (!exists("arboles"))
+  arboles <- read.csv(file.path(PROYECTO_ROOT, "resultados", "arboles_analisis.csv"),
+                      stringsAsFactors = FALSE)
 
 f01_raw <- read_excel(file.path(PROYECTO_ROOT, "inventario_forestal.xlsx"), sheet = "F01")
 names(f01_raw) <- make.names(names(f01_raw))
@@ -182,12 +187,13 @@ cat_notna <- function(..., sep = ", ") {
 }
 
 foto_orient <- function(fname) {
-  # "Sitio_35_Norte_a_Sur.jpg" → "Norte → Sur"
+  # "Sitio_35_Norte_a_Sur.jpg" → "Norte → Sur"; "Sitio_34.jpg" → ""
   s <- tools::file_path_sans_ext(basename(fname))
-  s <- sub("^Sitio_[0-9]+_", "", s)
-  s <- gsub("_a_", " → ", s, fixed = TRUE)
-  s <- gsub("_", " ", s, fixed = TRUE)
-  s
+  resto <- sub("^Sitio_[0-9]+_", "", s)
+  if (resto == s) return("")   # sin sufijo direccional
+  resto <- gsub("_a_", " → ", resto, fixed = TRUE)
+  resto <- gsub("_", " ", resto, fixed = TRUE)
+  resto
 }
 
 riesgo_color <- function(cat) {
@@ -225,7 +231,7 @@ generar_ficha <- function(sitio_df, muestreo_num) {
   mapa_ok  <- file.exists(file.path(tmp_dir, mapa_rel))
 
   foto_files <- list.files(file.path(tmp_dir, "fotos"),
-                           pattern = sprintf("^Sitio_%02d_", muestreo_num))
+                           pattern = sprintf("^Sitio_%02d[_.]", muestreo_num))
   fotos_rel  <- file.path("fotos", foto_files)
 
   # F01 para este sitio
@@ -282,11 +288,17 @@ generar_ficha <- function(sitio_df, muestreo_num) {
   if (length(fotos_rel) > 0) {
     tex <- c(tex, "\\begin{center}")
     for (foto in fotos_rel) {
-      orient <- esc(foto_orient(foto))
-      tex <- c(tex,
-        sprintf("\\includegraphics[width=\\textwidth,keepaspectratio]{%s}\\\\[2pt]", foto),
-        sprintf("{\\scriptsize\\textit{%s}}\\\\[8pt]", orient)
-      )
+      orient <- foto_orient(foto)
+      if (nchar(orient) > 0) {
+        tex <- c(tex,
+          sprintf("\\includegraphics[width=\\textwidth,keepaspectratio]{%s}\\\\[2pt]", foto),
+          sprintf("{\\scriptsize\\textit{%s}}\\\\[8pt]", esc(orient))
+        )
+      } else {
+        tex <- c(tex,
+          sprintf("\\includegraphics[width=\\textwidth,keepaspectratio]{%s}\\\\[8pt]", foto)
+        )
+      }
     }
     tex <- c(tex, "\\end{center}", "\\vspace{4pt}")
   }
