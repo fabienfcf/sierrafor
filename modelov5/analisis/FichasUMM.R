@@ -63,7 +63,8 @@ regen_raw <- read.csv(
 # Metadatos por UMM (una fila por UMM)
 umm_meta <- arboles %>%
   distinct(rodal, num_muestreos_realizados,
-           superficie_total_ha, superficie_corta_ha) %>%
+           superficie_total_ha, superficie_corta_ha,
+           longitud_corriente_m, franja_ribereña_ha) %>%
   mutate(
     area_ribera_ha = round(superficie_total_ha - superficie_corta_ha, 2),
     factor_exp     = superficie_corta_ha / (num_muestreos_realizados * AREA_SITIO_HA)
@@ -231,6 +232,7 @@ generar_ficha_umm <- function(umm) {
   sup_total <- meta$superficie_total_ha
   sup_corta <- meta$superficie_corta_ha
   sup_rib   <- meta$area_ribera_ha
+  long_corr <- meta$longitud_corriente_m
   fexp      <- meta$factor_exp   # sup_corta / (n_sitios * 0.1)
 
   arboles_u <- arboles %>% filter(rodal == umm)
@@ -373,10 +375,11 @@ generar_ficha_umm <- function(umm) {
   tex <- c(tex,
     "\\begin{small}",
     "\\begin{tabular}{@{}ll@{\\qquad}ll@{\\qquad}ll@{}}",
-    sprintf("\\textbf{Sup. total:} & %.2f~ha & \\textbf{Sup. aprovechable:} & %.2f~ha & \\textbf{\\'{A}rea ribere\\~na:} & %.2f~ha \\\\",
+    sprintf("\\textbf{Sup. total:} & %.2f~ha & \\textbf{Sup. producci\\'on:} & %.2f~ha & \\textbf{Franja ribere\\~na:} & %.2f~ha \\\\",
             sup_total, sup_corta, sup_rib),
-    sprintf("\\textbf{Sitios muestreados:} & %d & \\textbf{Sup. muestreada:} & %.2f~ha & &  \\\\",
-            n_sitios, n_sitios * AREA_SITIO_HA),
+    sprintf("\\textbf{Sitios muestreados:} & %d & \\textbf{Sup. muestreada:} & %.2f~ha & \\textbf{Long. corriente:} & %s~m \\\\",
+            n_sitios, n_sitios * AREA_SITIO_HA,
+            ifelse(is.na(long_corr) | long_corr == 0, "---", formatC(long_corr, format = "d", big.mark = ","))),
     "\\end{tabular}",
     "\\end{small}",
     "\\vspace{4pt}"

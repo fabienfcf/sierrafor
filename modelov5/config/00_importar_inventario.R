@@ -391,7 +391,7 @@ importar_inventario_completo <- function(ruta_archivo, ruta_umm = NULL) {
   # Cargar info de rodales si existe
   if (!is.null(ruta_umm) && file.exists(ruta_umm)) {
     cat("[7/7] Cargando información de rodales (UMM)...\n")
-    umm <- read_csv(ruta_umm, show_col_types = FALSE)
+    umm <- read_csv(ruta_umm, locale = locale(encoding = "latin1"), show_col_types = FALSE)
   } else {
     cat("[7/7] Sin información de rodales\n")
     umm <- NULL
@@ -508,33 +508,27 @@ construir_arboles_analisis <- function(inventario, config = CONFIG) {
   # ============================================================================
   
   if (!is.null(inventario$umm)) {
-    
-    # Verificar que SUPERFICIE_CORTA existe
-    if (!"SUPERFICIE_CORTA" %in% names(inventario$umm)) {
-      warning("⚠️ Columna SUPERFICIE_CORTA no encontrada en UMM_stats.csv")
-      warning("   Usando SUPERFICIE total como superficie aprovechable")
-      
-      inventario$umm <- inventario$umm %>%
-        mutate(SUPERFICIE_CORTA = SUPERFICIE)
-    }
-    
+
     arboles <- arboles %>%
       left_join(
         inventario$umm %>%
           select(
-            id, 
-            num_puntos, 
-            SUPERFICIE,           # Superficie TOTAL del rodal
-            SUPERFICIE_CORTA,     # ✅ Superficie APROVECHABLE (ribereña)
-            PEND_mean, 
-            SUP_cor_PEND
+            id,
+            num_puntos,
+            `SUPERFICIE UMM`,
+            `Superficie en Producción (ha)`,
+            `Longitud corriente de agua (m)`,
+            `Franja protectora de vegetación ribereña (ha)`,
+            PEND_mean
           ) %>%
           rename(
-            rodal = id,
-            superficie_total_ha = SUPERFICIE,         # ✅ Total
-            superficie_corta_ha = SUPERFICIE_CORTA,   # ✅ Aprovechable
-            pendiente_media = `PEND_mean`,
-            num_muestreos_realizados = num_puntos
+            rodal                  = id,
+            num_muestreos_realizados = num_puntos,
+            superficie_total_ha    = `SUPERFICIE UMM`,
+            superficie_corta_ha    = `Superficie en Producción (ha)`,
+            longitud_corriente_m   = `Longitud corriente de agua (m)`,
+            franja_ribereña_ha     = `Franja protectora de vegetación ribereña (ha)`,
+            pendiente_media        = PEND_mean
           ),
         by = "rodal"
       )
